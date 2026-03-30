@@ -1,0 +1,12 @@
+[build]
+  base = "aerial-booking"
+  publish = "aerial-booking"
+  functions = "aerial-booking/netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "18"
+
+[[redirects]]
+  from = "/line-callback.html"
+  to = "/index.html"
+  status = 200

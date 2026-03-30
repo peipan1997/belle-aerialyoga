@@ -1,0 +1,1533 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>空中律動・預約系統</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore-compat.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --mb1:#e5edf3;--mb2:#c8d8e4;--mb3:#a4bccc;--mb4:#7a9db5;
+  --mb5:#5c7f97;--mb6:#456478;--mb7:#334d5e;--mb8:#213040;
+  --sage:#8fa89a;--sl:#eaf2ee;--sand:#b9a880;
+  --t1:#213040;--t3:#7a9db5;--tm:#a4bccc;
+  --bg:#f4f7f9;--sur:#fff;--brd:#dde8f0;
+}
+body{font-family:"Noto Sans TC",sans-serif;background:var(--bg);color:var(--t1);min-height:100vh}
+.wrap{max-width:900px;margin:0 auto;padding:12px 16px}
+.dbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding-bottom:12px}
+.vbtn{padding:6px 14px;border-radius:20px;border:1px solid var(--mb3);background:var(--sur);color:var(--mb5);font-size:12px;cursor:pointer;font-family:inherit}
+.vbtn.on{background:var(--mb6);color:#fff;border-color:var(--mb6)}
+.vbtn:hover:not(.on){background:var(--mb1)}
+.dbanner{background:var(--mb7);color:rgba(255,255,255,.6);font-size:11px;padding:5px 14px;border-radius:20px;margin-left:auto}
+.app{display:flex;flex-direction:column;min-height:100vh;background:var(--bg)}
+@media(min-width:600px){.app{border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(33,48,64,.12);min-height:600px}}
+.topbar{background:var(--mb8);padding:12px 16px;display:flex;justify-content:space-between;align-items:flex-start;flex-shrink:0}
+.tb-name{font-size:15px;color:#fff;font-weight:500;margin-top:2px}
+.tb-brand{font-size:10px;color:rgba(255,255,255,.35);letter-spacing:.1em}
+.tb-roles{display:flex;gap:4px;margin-top:3px;flex-wrap:wrap}
+.tb-rc{font-size:10px;padding:1px 7px;border-radius:10px;border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.55)}
+.sw{flex-shrink:0;padding:6px 12px;border-radius:16px;border:1px solid rgba(255,255,255,.2);background:transparent;color:rgba(255,255,255,.7);font-size:11px;cursor:pointer;font-family:inherit;white-space:nowrap}
+.sw:hover{background:rgba(255,255,255,.1)}
+.rsbar{background:var(--mb7);padding:7px 16px;display:flex;gap:6px;overflow-x:auto;flex-shrink:0}
+.rsbar::-webkit-scrollbar{display:none}
+.rsbtn{padding:5px 13px;border-radius:14px;border:1px solid rgba(255,255,255,.2);background:transparent;color:rgba(255,255,255,.5);font-size:12px;cursor:pointer;font-family:inherit;white-space:nowrap}
+.rsbtn.on{background:rgba(255,255,255,.15);color:#fff;border-color:rgba(255,255,255,.35)}
+.tabbar{background:var(--mb7);display:flex;border-bottom:1px solid rgba(255,255,255,.08);padding:0 16px;overflow-x:auto;flex-shrink:0}
+.tabbar::-webkit-scrollbar{display:none}
+.tab{padding:10px 12px;font-size:13px;color:rgba(255,255,255,.4);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap}
+.tab.on{color:rgba(255,255,255,.92);border-bottom-color:rgba(255,255,255,.6)}
+.tab:hover:not(.on){color:rgba(255,255,255,.7)}
+.content{padding:14px;display:flex;flex-direction:column;gap:12px;flex:1;overflow-y:auto}
+@media(min-width:600px){.content{padding:18px;gap:14px}}
+.cal-wrap{background:var(--sur);border-radius:12px;border:.5px solid var(--brd);overflow:hidden}
+.cal-hd{background:var(--mb7);padding:11px 14px;display:flex;align-items:center;justify-content:space-between}
+.cal-mon{font-size:14px;font-weight:500;color:#fff}
+.cnav{width:28px;height:28px;border-radius:50%;border:1px solid rgba(255,255,255,.25);background:transparent;color:rgba(255,255,255,.7);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center}
+.cnav:hover{background:rgba(255,255,255,.15)}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);padding:8px}
+.cal-wd{text-align:center;font-size:10px;font-weight:500;color:var(--t3);padding:4px 0}
+.cal-day{display:flex;flex-direction:column;align-items:center;padding:3px 1px;cursor:pointer;border-radius:6px;min-height:36px}
+.cal-day:hover:not(.empty){background:var(--mb1)}
+.cal-day.empty{cursor:default}
+.cal-dn{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--t1)}
+.cal-day.today .cal-dn{background:var(--mb1);color:var(--mb6);font-weight:500;box-shadow:0 0 0 1.5px var(--mb3)}
+.cal-day.sel .cal-dn{background:var(--mb6);color:#fff;font-weight:500}
+.cdot-row{height:4px;display:flex;align-items:center;justify-content:center;margin-top:2px}
+.cdot{width:3px;height:3px;border-radius:50%;background:var(--mb3)}
+.cc{background:var(--sur);border-radius:10px;border:.5px solid var(--brd);overflow:hidden;display:flex;flex-direction:column}
+.cc-main{display:flex}
+.cc-bar{width:4px;flex-shrink:0}
+.cc-body{flex:1;padding:10px 12px;display:flex;align-items:center;gap:10px;min-width:0}
+.cc-icon{width:36px;height:36px;border-radius:9px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:16px}
+.cc-info{flex:1;min-width:0}
+.cc-name{font-size:13px;font-weight:500;color:var(--t1);margin-bottom:2px}
+.cc-tline{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--t3);margin-bottom:3px}
+.cc-tdot{width:12px;height:12px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:7px;color:#fff;flex-shrink:0}
+.cc-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.cc-time{font-size:11px;color:var(--t3);background:var(--bg);padding:2px 6px;border-radius:5px;border:.5px solid var(--brd)}
+.cap{height:3px;background:var(--brd);border-radius:2px;overflow:hidden;width:48px}
+.cap-f{height:100%;border-radius:2px;background:var(--mb4)}
+.cc-spots{font-size:11px;color:var(--t3)}
+.cc-right{flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;gap:5px;padding-right:2px}
+.cc-exp{border-top:.5px solid var(--brd);padding:10px 12px 12px;display:none}
+.cc-exp.open{display:block}
+.exp-row{background:var(--sur);border-radius:10px;border:.5px solid var(--brd);overflow:hidden}
+.exp-hd{padding:11px 14px;display:flex;align-items:center;cursor:pointer;user-select:none}
+.exp-bar{width:4px;align-self:stretch;flex-shrink:0;margin-right:11px;border-radius:2px}
+.exp-inf{flex:1;min-width:0}
+.exp-title{font-size:13px;font-weight:500;color:var(--t1)}
+.exp-sub{font-size:11px;color:var(--t3);margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.exp-right{display:flex;align-items:center;gap:8px;flex-shrink:0;margin-left:6px}
+.exp-cnt{font-size:11px;color:var(--mb5);background:var(--mb1);padding:2px 8px;border-radius:12px;white-space:nowrap}
+.exp-chev{font-size:11px;color:var(--tm);transition:transform .2s;display:inline-block}
+.exp-body{border-top:.5px solid var(--brd);padding:10px 14px 12px;display:none}
+.exp-body.open{display:block}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chip{display:inline-flex;align-items:center;gap:4px;background:var(--bg);border-radius:20px;padding:3px 9px;font-size:11px;color:var(--t1);border:.5px solid var(--brd)}
+.chip-av{width:14px;height:14px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:7px;color:#fff;flex-shrink:0}
+.wl-sec{margin-top:8px;padding-top:8px;border-top:1px dashed var(--brd)}
+.wl-lbl{font-size:10px;color:var(--t3);letter-spacing:.05em;margin-bottom:5px}
+.sp{font-size:11px;font-weight:500;padding:2px 7px;border-radius:5px;white-space:nowrap}
+.sp-open{background:var(--mb1);color:var(--mb5)}.sp-booked{background:var(--mb1);color:var(--mb6)}
+.sp-wait{background:var(--sl);color:#3a6b50}.sp-full{background:var(--bg);color:var(--tm)}
+.sp-paid{background:#eaf5ea;color:#3a7a3a}.sp-stop{background:#f5f0ee;color:#a07060}
+.sp-pend{background:#fff8e0;color:#8a6000}.sp-chg{background:#ffe8e8;color:#8a2020}
+.sp-rf{background:#f0e8ff;color:#6040a0}
+.btn{padding:6px 11px;border-radius:7px;border:none;cursor:pointer;font-size:12px;font-weight:500;font-family:inherit;white-space:nowrap}
+.btn-p{background:var(--mb6);color:#fff}.btn-p:hover{background:var(--mb7)}
+.btn-c{background:var(--bg);color:var(--t3);border:.5px solid var(--brd)}.btn-c:hover:not(:disabled){border-color:var(--mb3);color:var(--mb5)}.btn-c:disabled{opacity:.4;cursor:not-allowed}
+.btn-w{background:var(--sl);color:#3a6b50}.btn-w:hover{background:#d5ebe0}
+.btn-rf{background:#f0e8ff;color:#6040a0;border:.5px solid #d0c0f0}.btn-rf:hover{background:#e0d0ff}
+.act{padding:4px 9px;border-radius:6px;border:.5px solid var(--brd);background:var(--sur);font-size:11px;cursor:pointer;font-family:inherit;color:var(--t3)}
+.act:hover{border-color:var(--mb3);color:var(--mb5)}
+.act-ok{background:var(--mb5);border-color:var(--mb5);color:#fff}.act-ok:hover{background:var(--mb6)!important;color:#fff!important}
+.act-gr{background:#3a7a3a;border-color:#3a7a3a;color:#fff}.act-gr:hover{background:#2d622d!important;color:#fff!important}
+.act-del{color:#c44}.act-del:hover{border-color:#c44!important;background:#fff5f5!important;color:#c44!important}
+.big-btn{width:100%;padding:13px;border-radius:10px;border:none;background:var(--mb5);color:#fff;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px}
+.big-btn:hover{background:var(--mb6)}.big-btn:disabled{background:var(--mb2);color:var(--mb6);cursor:not-allowed}
+.bh{background:var(--mb7);border-radius:12px;padding:16px 18px;color:#fff}
+.bh-amt{font-size:30px;font-weight:300;line-height:1}
+.bh-sub{font-size:11px;color:rgba(255,255,255,.35);margin-top:4px}
+.bill-row{background:var(--sur);border-radius:8px;border:.5px solid var(--brd);padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.br-type{font-size:13px;font-weight:500;color:var(--t1)}.br-date{font-size:11px;color:var(--t3);margin-top:2px}
+.br-amt{font-size:14px;font-weight:500;color:var(--mb6)}.br-amt.disc{color:var(--sage)}
+.disc-note{font-size:10px;color:var(--sage);margin-top:2px}
+.pay-card{background:var(--sur);border-radius:12px;border:.5px solid var(--brd);overflow:hidden}
+.pay-hd{background:var(--mb1);padding:10px 14px;display:flex;align-items:center;gap:8px;border-bottom:.5px solid var(--mb2)}
+.pay-hdt{font-size:13px;font-weight:500;color:var(--mb7)}
+.pay-body{padding:14px;display:flex;flex-direction:column;gap:11px}
+.pay-ar{display:flex;align-items:center;justify-content:space-between;background:var(--bg);border-radius:8px;padding:10px 12px}
+.pa-lbl{font-size:12px;color:var(--t3)}.pa-amt{font-size:18px;font-weight:500;color:var(--mb6)}
+.pay-br{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.pay-acc{font-size:16px;font-weight:500;color:var(--mb7);letter-spacing:.06em}
+.copy-btn{padding:6px 12px;border-radius:7px;border:1px solid var(--mb3);background:var(--sur);color:var(--mb6);font-size:12px;cursor:pointer;font-family:inherit}
+.copy-btn:hover{background:var(--mb1)}.copy-btn.copied{background:var(--sl);border-color:var(--sage);color:#3a6b50}
+.pay-div{height:.5px;background:var(--brd)}
+.pay-note{font-size:12px;color:var(--mb7);background:var(--bg);border-radius:7px;padding:10px 12px;line-height:1.8}
+.banner{border-radius:10px;padding:12px 14px;display:flex;align-items:flex-start;gap:10px}
+.banner.green{background:#eaf5ea;border:.5px solid #b0d8b0}
+.banner.yellow{background:#fff8e8;border:.5px solid #f0d080}
+.banner.blue{background:var(--mb1);border:.5px solid var(--mb2)}
+.banner.red{background:#ffe8e8;border:.5px solid #f0a0a0}
+.banner.purple{background:#f4eeff;border:.5px solid #d0b8f8}
+.bicon{font-size:18px;flex-shrink:0;margin-top:1px}
+.btitle{font-size:13px;font-weight:500}
+.bsub{font-size:11px;margin-top:3px;line-height:1.6}
+.banner.green .btitle{color:#2a6a2a}.banner.green .bsub{color:#4a8a4a}
+.banner.yellow .btitle{color:#7a5000}.banner.yellow .bsub{color:#a07820}
+.banner.blue .btitle{color:var(--mb7)}.banner.blue .bsub{color:var(--t3)}
+.banner.red .btitle{color:#8a2020}.banner.red .bsub{color:#aa3030}
+.banner.purple .btitle{color:#5030a0}.banner.purple .bsub{color:#7050c0}
+.ss{background:var(--sur);border-radius:12px;border:.5px solid var(--brd);overflow:hidden}
+.s-hd{background:var(--mb1);padding:10px 14px;border-bottom:.5px solid var(--mb2);display:flex;align-items:center;gap:8px}
+.s-hdt{font-size:13px;font-weight:500;color:var(--mb7)}
+.s-body{padding:14px;display:flex;flex-direction:column;gap:12px}
+.sg2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+@media(max-width:400px){.sg2{grid-template-columns:1fr}}
+.sfg{display:flex;flex-direction:column;gap:4px}
+.sfl{font-size:11px;color:var(--t3);font-weight:500;letter-spacing:.04em}
+.sfi{padding:9px 11px;border-radius:8px;border:.5px solid var(--brd);background:var(--bg);font-size:13px;color:var(--t1);font-family:inherit;outline:none;width:100%}
+.sfi:focus{border-color:var(--mb4);background:var(--sur)}
+.sfh{font-size:10px;color:var(--tm);line-height:1.5}
+.save-bar{display:flex;align-items:center;justify-content:flex-end;gap:10px}
+.save-st{font-size:12px;color:var(--sage);opacity:0}.save-st.show{opacity:1}
+.btn-save{padding:9px 20px;border-radius:8px;border:none;background:var(--mb5);color:#fff;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit}
+.btn-save:hover{background:var(--mb6)}
+.btn-sec{padding:9px 14px;border-radius:8px;border:1px solid var(--mb3);background:var(--sur);color:var(--mb6);font-size:13px;cursor:pointer;font-family:inherit}
+.ct-card{background:var(--bg);border-radius:10px;border:.5px solid var(--brd);padding:12px 14px;display:flex;align-items:center;gap:10px}
+.ct-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0}
+.ct-name{font-size:13px;font-weight:500;color:var(--t1);margin-bottom:3px}
+.ct-meta{font-size:11px;color:var(--t3);display:flex;gap:7px;flex-wrap:wrap}
+.btn-dash{padding:10px 18px;border-radius:8px;border:1px dashed var(--mb3);background:transparent;color:var(--mb5);font-size:13px;cursor:pointer;font-family:inherit;width:100%}
+.btn-dash:hover{background:var(--mb1)}
+.tblw{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:10px;border:.5px solid var(--brd)}
+.at{width:100%;border-collapse:collapse;background:var(--sur)}
+.at th{padding:8px 10px;text-align:left;font-size:11px;font-weight:500;letter-spacing:.06em;color:var(--t3);background:var(--bg);border-bottom:.5px solid var(--brd);white-space:nowrap}
+.at td{padding:10px 10px;border-bottom:.5px solid var(--brd);font-size:12px;color:var(--t1);vertical-align:middle}
+.at tr:last-child td{border-bottom:none}
+.at tbody tr:hover{background:var(--bg)}
+.rdisp{display:flex;gap:3px;flex-wrap:wrap}
+.rc{font-size:10px;font-weight:500;padding:1px 7px;border-radius:10px;white-space:nowrap}
+.rc.student{background:var(--sl);color:#3a6b50}.rc.teacher{background:var(--mb1);color:var(--mb6)}.rc.admin{background:#f0ede8;color:#7a6050}
+.toolbar{background:var(--sur);border-radius:10px;border:.5px solid var(--brd);padding:11px 14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.mv-wrap{display:flex;align-items:center;gap:6px}
+.mv-btn{width:28px;height:28px;border-radius:50%;border:.5px solid var(--brd);background:var(--sur);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;color:var(--t3)}
+.mv-btn:hover{border-color:var(--mb3);color:var(--mb5)}
+.mv-lbl{font-size:13px;font-weight:500;color:var(--t1);min-width:80px;text-align:center}
+.tool-acts{display:flex;gap:6px;flex-wrap:wrap}
+.btn-add{padding:7px 14px;border-radius:8px;border:none;background:var(--mb5);color:#fff;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit}
+.btn-add:hover{background:var(--mb6)}
+.btn-copy{padding:7px 12px;border-radius:8px;border:1px solid var(--mb3);background:var(--sur);color:var(--mb6);font-size:12px;cursor:pointer;font-family:inherit}
+.btn-copy:hover{background:var(--mb1)}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999;display:flex;align-items:flex-end;justify-content:center}
+@media(min-width:600px){.modal-bg{align-items:center;padding:20px}}
+.modal-box{background:var(--sur);border-radius:16px 16px 0 0;width:100%;max-width:520px;max-height:92vh;display:flex;flex-direction:column;overflow:hidden}
+@media(min-width:600px){.modal-box{border-radius:14px;max-height:88vh}}
+.modal-hd{background:var(--mb8);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.modal-hdt{font-size:14px;font-weight:500;color:#fff}
+.modal-x{width:26px;height:26px;border-radius:50%;border:1px solid rgba(255,255,255,.2);background:transparent;color:rgba(255,255,255,.6);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center}
+.modal-x:hover{background:rgba(255,255,255,.15)}
+.modal-body{padding:16px;display:flex;flex-direction:column;gap:13px;overflow-y:auto;flex:1}
+.mg2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+@media(max-width:400px){.mg2{grid-template-columns:1fr}}
+.mf{display:flex;flex-direction:column;gap:4px}
+.ml{font-size:11px;color:var(--t3);font-weight:500;letter-spacing:.04em}
+.mi,.ms{padding:9px 11px;border-radius:8px;border:.5px solid var(--brd);background:var(--bg);font-size:13px;color:var(--t1);font-family:inherit;outline:none;width:100%}
+.mi:focus,.ms:focus{border-color:var(--mb4);background:var(--sur)}
+.mhint{font-size:10px;color:var(--tm);margin-top:2px;line-height:1.5}
+.modal-ft{padding:12px 16px;background:var(--bg);border-top:.5px solid var(--brd);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0}
+.m-cancel{padding:9px 16px;border-radius:8px;border:.5px solid var(--brd);background:var(--sur);font-size:13px;cursor:pointer;font-family:inherit;color:var(--t3)}
+.m-cancel:hover{border-color:var(--mb3);color:var(--mb5)}
+.m-ok{padding:9px 20px;border-radius:8px;border:none;background:var(--mb5);color:#fff;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit}
+.m-ok:hover{background:var(--mb6)}
+.t-opt{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;border:.5px solid var(--brd);cursor:pointer;background:var(--bg)}
+.t-opt:hover{border-color:var(--mb3);background:var(--mb1)}
+.t-opt.sel{border-color:var(--mb5);background:var(--mb1)}
+.t-av{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;flex-shrink:0;font-weight:500}
+.t-name{font-size:13px;color:var(--t1);flex:1;font-weight:500}
+.t-rls{display:flex;gap:3px;flex-wrap:wrap;margin-top:2px}
+.t-rc{font-size:10px;padding:1px 5px;border-radius:10px}
+.trc-t{background:var(--mb1);color:var(--mb6)}.trc-a{background:#f0ede8;color:#7a6050}.trc-s{background:var(--sl);color:#3a6b50}
+.t-chk{margin-left:auto;width:18px;height:18px;border-radius:50%;background:var(--mb5);color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center;opacity:0;flex-shrink:0}
+.t-opt.sel .t-chk{opacity:1}
+.cprev{background:var(--bg);border-radius:8px;padding:11px 13px;border:.5px solid var(--mb2)}
+.cprev-t{font-size:10px;color:var(--mb6);font-weight:500;margin-bottom:7px;letter-spacing:.06em}
+.cprev-r{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--t1);padding:3px 0}
+.cprev-k{color:var(--t3);min-width:60px;font-size:11px}.cprev-v{font-weight:500}
+.csw{display:flex;gap:6px;flex-wrap:wrap}
+.csw-item{width:26px;height:26px;border-radius:6px;cursor:pointer;border:2px solid transparent}
+.csw-item.sel{border-color:var(--t1);transform:scale(1.15)}
+.rcbg{display:flex;gap:10px;flex-wrap:wrap;padding:11px;background:var(--bg);border-radius:8px;border:.5px solid var(--brd)}
+.rcb{display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px;color:var(--t1)}
+.rcb input{accent-color:var(--mb5);width:15px;height:15px;cursor:pointer}
+.srch-wrap{position:relative;width:100%}
+.srch-wrap input{width:100%;padding:8px 32px 8px 11px;border-radius:8px;border:.5px solid var(--brd);background:var(--bg);font-size:13px;font-family:inherit;outline:none;color:var(--t1)}
+.srch-wrap input:focus{border-color:var(--mb4)}
+.srch-ico{position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--tm);pointer-events:none}
+.login-wrap{display:flex;align-items:center;justify-content:center;min-height:80vh;padding:16px}
+.login-card{background:var(--sur);border:.5px solid var(--brd);border-radius:14px;padding:32px 24px;width:100%;max-width:340px;text-align:center;box-shadow:0 6px 28px rgba(33,48,64,.1)}
+.login-icon{width:52px;height:52px;border-radius:50%;background:var(--mb1);margin:0 auto 16px;display:flex;align-items:center;justify-content:center}
+.login-title{font-size:16px;font-weight:500;color:var(--t1);margin-bottom:6px}
+.login-sub{font-size:12px;color:var(--t3);margin-bottom:22px;line-height:1.8}
+.line-btn{width:100%;padding:12px;border-radius:10px;border:none;background:#06c755;color:#fff;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:16px}
+.line-btn:hover{background:#05b34a}
+.demo-sep{font-size:11px;color:var(--tm);margin-bottom:8px}
+.demo-accs{display:flex;flex-direction:column;gap:5px}
+.demo-acc{padding:10px 12px;border-radius:8px;border:.5px solid var(--brd);background:var(--bg);cursor:pointer;font-size:12px;display:flex;justify-content:space-between;align-items:center;font-family:inherit;color:var(--t1);text-align:left}
+.demo-acc:hover{border-color:var(--mb3);background:var(--mb1)}
+.sec-title{font-size:14px;font-weight:500;color:var(--t1)}
+.info-box{background:var(--mb1);border:.5px solid var(--mb2);border-radius:8px;padding:10px 13px;font-size:12px;color:var(--mb7);line-height:1.6}
+.empty{text-align:center;padding:24px;color:var(--t3);font-size:13px}
+.divider{height:.5px;background:var(--brd)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  
+  <div class="app">
+    <div id="topbar-area"></div>
+    <div id="content-area"></div>
+  </div>
+  <div id="modal"></div>
+  <div id="loading-overlay" style="display:none;position:fixed;inset:0;background:rgba(33,48,64,.85);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:16px">
+    <div style="width:40px;height:40px;border:3px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;animation:spin 0.8s linear infinite"></div>
+    <div class="ld-msg" style="color:#fff;font-size:14px;font-family:'Noto Sans TC',sans-serif">載入中...</div>
+  </div>
+  <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+</div>
+<script>
+
+// ═══ FIREBASE CONFIG
+const firebaseConfig = {
+  apiKey: "AIzaSyDCwLnMomaqkXaExkfaJzGIeSLhjbK8DWE",
+  authDomain: "belle-aerialyoga-booking.firebaseapp.com",
+  projectId: "belle-aerialyoga-booking",
+  storageBucket: "belle-aerialyoga-booking.firebasestorage.app",
+  messagingSenderId: "724043029118",
+  appId: "1:724043029118:web:dfcbe88a53f05de14b962f",
+  measurementId: "G-BRQF327GNG"
+};
+const app = firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// ═══ LINE LOGIN CONFIG
+const LINE_CLIENT_ID = '2009641467';
+const LINE_REDIRECT_URI = 'https://voluble-granita-401749.netlify.app/line-callback.html';
+const LINE_STATE = 'aerial_yoga_' + Math.random().toString(36).slice(2);
+
+// ═══ GLOBAL HANDLER TABLE
+const _H = {};
+function _h(fn){ const k='h'+(++_hN); _H[k]=fn; return k; }
+let _hN=0;
+// Expose functions needed by onclick attributes to window scope
+
+// ═══ CONSTANTS
+const NOW = new Date();
+const ALL_ROLES = ["student","teacher","admin"];
+const RL = {student:"學生",teacher:"老師",admin:"管理員"};
+const CT_COLORS = ["#7a9db5","#8fa89a","#b9a880","#c4856a","#9a7abf","#5c7f97","#bf7a9a","#7abf9a"];
+
+// ═══ LOCAL STATE (synced from Firebase)
+let users = [];
+let courseTypes = [
+  {id:"ct1",name:"空中瑜珈",price:450,comboPrice:400,comboWith:"ct2",color:"#7a9db5",icon:"🧘",maxPeople:8},
+  {id:"ct2",name:"空中環",  price:450,comboPrice:null,comboWith:null, color:"#8fa89a",icon:"⭕",maxPeople:8},
+];
+let _ctId=3;
+const CT_COLORS_LIST = CT_COLORS;
+let cfg={cancelHours:24,bankName:"國泰世華銀行",bankCode:"013",account:"222255588742",payee:"貝你飛空中律動",note:"請匯款後截圖，傳給管理員確認"};
+const TMPL=[{weekday:2,time:"19:00",type:"空中瑜珈"},{weekday:2,time:"20:15",type:"空中環"},{weekday:4,time:"19:00",type:"空中瑜珈"},{weekday:4,time:"20:15",type:"空中環"}];
+const MIN=3;
+
+let schedules=[];
+let bookings=[];
+let payments=[],refundRequests=[];
+let bidN=10,sidN=100,rfN=1;
+const now=new Date();
+let monthView=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
+let selDate=now.toISOString().slice(0,10);
+let calY=now.getFullYear(),calM=now.getMonth()+1;
+let acalY=now.getFullYear(),acalM=now.getMonth()+1;
+let tcalY=now.getFullYear(),tcalM=now.getMonth()+1;
+let adminSelDate=now.toISOString().slice(0,10),teacherSelDate=now.toISOString().slice(0,10);
+let activeTab={student:"cal",admin:"courses"};
+let currentView="login",currentUserId=null,activeRole=null;
+let expandedRows={};
+let _pickT="",_editT="",_editSid="",_ctColor=CT_COLORS[0],_editCtId="";
+let _statsSearch="",_addSearch="";
+window._H = _H;
+
+
+let _dbLoaded=false;
+
+// ═══ FIREBASE HELPERS
+async function fbSet(col, id, data){ await db.collection(col).doc(id).set(data); }
+async function fbAdd(col, data){ const r=await db.collection(col).add(data); return r.id; }
+async function fbUpdate(col, id, data){ await db.collection(col).doc(id).update(data); }
+async function fbDelete(col, id){ await db.collection(col).doc(id).delete(); }
+async function fbGetAll(col){ const s=await db.collection(col).get(); return s.docs.map(d=>({...d.data(),_fid:d.id})); }
+
+// ═══ LOAD ALL DATA FROM FIREBASE
+async function loadFromFirebase(){
+  showLoading();
+  try {
+    const [fbUsers, fbSchedules, fbBookings, fbPayments, fbRefunds, fbCfg, fbCT] = await Promise.all([
+      fbGetAll('users'), fbGetAll('schedules'), fbGetAll('bookings'),
+      fbGetAll('payments'), fbGetAll('refundRequests'),
+      fbGetAll('config'), fbGetAll('courseTypes')
+    ]);
+    users = fbUsers;
+    if(fbSchedules.length) schedules = fbSchedules;
+    else {
+      schedules = [...buildMonth(new Date().getFullYear(), new Date().getMonth()+1)];
+      await saveSchedulesToFb();
+    }
+    bookings = fbBookings;
+    payments = fbPayments;
+    refundRequests = fbRefunds;
+    if(fbCfg.length){ const c=fbCfg[0]; Object.assign(cfg,c); }
+    if(fbCT.length){ courseTypes=fbCT; _ctId=fbCT.length+1; }
+    else { await saveCTtoFb(); }
+    _dbLoaded=true;
+  } catch(e){
+    console.error('Firebase load error', e);
+    throw e; // re-throw so init() can catch it
+  } finally {
+    hideLoading();
+  }
+}
+
+async function saveSchedulesToFb(){
+  for(const s of schedules){ await fbSet('schedules', s.id, s); }
+}
+async function saveCTtoFb(){
+  for(const ct of courseTypes){ await fbSet('courseTypes', ct.id, ct); }
+}
+
+// ═══ LINE NOTIFY
+async function lineNotify(toUserId, message){
+  if(!toUserId){ console.log('No LINE userId, skip notify'); return; }
+  try {
+    await fetch('/.netlify/functions/line-notify', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ to: toUserId, message })
+    });
+  } catch(e){ console.error('LINE notify error', e); }
+}
+
+// ═══ LINE LOGIN
+function doLineLogin(){
+  const state = 'aerial_' + Date.now();
+  localStorage.setItem('line_state', state);
+  const url = 'https://access.line.me/oauth2/v2.1/authorize?' + new URLSearchParams({
+    response_type: 'code',
+    client_id: LINE_CLIENT_ID,
+    redirect_uri: LINE_REDIRECT_URI,
+    state,
+    scope: 'profile openid',
+  });
+  window.location.href = url;
+}
+
+async function handleLineCallback(){
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('code');
+  const state = params.get('state');
+  if(!code) return false;
+  // Clear URL
+  window.history.replaceState({}, document.title, '/');
+  showLoading('LINE 登入中...');
+  try {
+    const res = await fetch('/.netlify/functions/line-login', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ code })
+    });
+    const profile = await res.json();
+    if(!profile.userId) throw new Error('No userId');
+    await loginWithLineProfile(profile);
+    return true;
+  } catch(e){
+    console.error('LINE login error', e);
+    hideLoading();
+    alert('LINE 登入失敗，請再試一次');
+    return false;
+  }
+}
+
+async function loginWithLineProfile(profile){
+  await loadFromFirebase();
+  // Check if user exists
+  let user = users.find(u=>u.lineUserId===profile.userId);
+  if(!user){
+    // New user - check if first user (becomes admin)
+    const isFirst = users.length === 0;
+    const color = CT_COLORS[Math.floor(Math.random()*CT_COLORS.length)];
+    const newUser = {
+      id: 'u_'+profile.userId,
+      name: profile.displayName,
+      lineUserId: profile.userId,
+      pictureUrl: profile.pictureUrl||null,
+      roles: isFirst ? ["student","admin"] : ["student"],
+      color
+    };
+    await fbSet('users', newUser.id, newUser);
+    users.push(newUser);
+    user = newUser;
+  }
+  currentUserId = user.id;
+  if(user.roles.includes("student")) activeRole="student";
+  else if(user.roles.includes("teacher")) activeRole="teacher";
+  else activeRole="admin";
+  hideLoading();
+  V(activeRole);
+}
+
+function showLoading(msg){
+  const el=document.getElementById('loading-overlay');
+  if(el){ el.style.display='flex'; el.querySelector('.ld-msg').textContent=msg||'載入中...'; }
+}
+function hideLoading(){
+  const el=document.getElementById('loading-overlay');
+  if(el) el.style.display='none';
+}
+
+const getCTById=id=>courseTypes.find(t=>t.id===id);
+const getCTByName=name=>courseTypes.find(t=>t.name===name)||courseTypes[0];
+const getTname=tid=>users.find(u=>u.id===tid)?.name||"—";
+const getTcolor=tid=>users.find(u=>u.id===tid)?.color||"#aaa";
+const getTeachers=()=>users.filter(u=>u.roles.includes("teacher"));
+const getStudents=()=>users.filter(u=>u.roles.includes("student"));
+
+function buildMonth(y,m){
+  const r=[],days=new Date(y,m,0).getDate();
+  for(let d=1;d<=days;d++){
+    const dt=new Date(y,m-1,d);
+    TMPL.forEach(t=>{
+      if(t.weekday===dt.getDay()){
+        const ct=courseTypes.find(x=>x.name===t.type)||courseTypes[0];
+        r.push({id:"s-"+y+"-"+m+"-"+d+"-"+t.type+"-"+t.time,
+          date:y+"-"+String(m).padStart(2,"0")+"-"+String(d).padStart(2,"0"),
+          time:t.time,type:t.type,teacherId:"t1",
+          max:ct?ct.maxPeople:8,min:MIN,cancelHours:null,status:"open",src:"tpl"});
+      }
+    });
+  }
+  return r.sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
+}
+
+
+// ═══ HELPERS
+const fmtDate=s=>{const d=new Date(s+"T00:00:00");return (d.getMonth()+1)+"/"+d.getDate()+"（"+"日一二三四五六"[d.getDay()]+"）";};
+const fmtYM=(y,m)=>y+" 年 "+m+" 月";
+const bkdCnt=sid=>bookings.filter(b=>b.sid===sid&&b.status==="booked").length;
+const waitCnt=sid=>bookings.filter(b=>b.sid===sid&&b.status==="waitlist").length;
+const uBooked=(sid,uid)=>bookings.find(b=>b.sid===sid&&b.uid===uid&&b.status==="booked");
+const uWait=(sid,uid)=>bookings.find(b=>b.sid===sid&&b.uid===uid&&b.status==="waitlist");
+const canCancelS=s=>{const h=s.cancelHours!=null?s.cancelHours:cfg.cancelHours;return new Date(s.date+"T"+s.time+":00")-NOW>=h*3600000;};
+const mSch=mv=>schedules.filter(s=>s.date.startsWith(mv||monthView)).sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
+const gByD=arr=>{const g={};arr.forEach(s=>{if(!g[s.date])g[s.date]=[];g[s.date].push(s);});return g;};
+const onDate=date=>schedules.filter(s=>s.date===date&&s.status==="open").sort((a,b)=>a.time.localeCompare(b.time));
+const mvLabel=()=>{const p=monthView.split("-");return p[0]+" 年 "+Number(p[1])+" 月";};
+
+// ═══ PAYMENTS
+const getPayment=(uid,mv)=>payments.slice().reverse().find(p=>p.uid===uid&&p.month===(mv||monthView));
+function paymentStatus(uid,mv){
+  const p=getPayment(uid,mv||monthView);if(!p)return "none";
+  const{total}=computeBilling(uid,mv||monthView);
+  if(p.status==="confirmed")return p.paidAmount===total?"confirmed":"changed";
+  if(p.status==="pending")return "pending";
+  return "none";
+}
+async function notifyPayment(uid,mv){
+  const mv2=mv||monthView,{total}=computeBilling(uid,mv2);
+  const pid='pay_'+uid+'_'+mv2;
+  const p={id:pid,uid,month:mv2,paidAmount:total,status:"pending"};
+  const i=payments.findIndex(x=>x.uid===uid&&x.month===mv2);
+  if(i>-1)payments.splice(i,1);
+  payments.push(p);
+  await fbSet('payments', pid, p);
+  // Notify admin via LINE
+  const admins=users.filter(u=>u.roles.includes("admin")&&u.lineUserId);
+  const uname=users.find(u=>u.id===uid)?.name||"學員";
+  for(const a of admins){
+    await lineNotify(a.lineUserId, `💰 付款通知\n${uname} 已完成匯款\n${mv2} 月費用：$${total.toLocaleString()}\n請至系統確認收款`);
+  }
+  render();
+}
+async function confirmPayment(uid,mv){
+  const mv2=mv||monthView,{total}=computeBilling(uid,mv2);
+  const pid='pay_'+uid+'_'+mv2;
+  const p={id:pid,uid,month:mv2,paidAmount:total,status:"confirmed"};
+  const i=payments.findIndex(x=>x.uid===uid&&x.month===mv2);
+  if(i>-1)payments[i]=p; else payments.push(p);
+  await fbSet('payments', pid, p);
+  render();
+}
+
+// ═══ BILLING
+function computeBilling(uid,mv){
+  const tgt=mv||monthView;
+  const active=bookings.filter(b=>b.uid===uid&&b.status==="booked");
+  const smap=Object.fromEntries(schedules.filter(s=>s.status==="open"&&s.date.startsWith(tgt)).map(s=>[s.id,s]));
+  const byDay={};
+  active.forEach(b=>{const s=smap[b.sid];if(!s)return;if(!byDay[s.date])byDay[s.date]=[];byDay[s.date].push({b,s});});
+  const rows=[];
+  Object.values(byDay).forEach(items=>{
+    const tp=new Set(items.map(i=>i.s.type));
+    items.forEach(item=>{
+      const ct=getCTByName(item.s.type);
+      let amt=ct?ct.price:450,disc=false,origAmt=amt;
+      if(ct&&ct.comboPrice!=null&&ct.comboWith){
+        const p2=getCTById(ct.comboWith);
+        if(p2&&tp.has(p2.name)){amt=ct.comboPrice;disc=true;origAmt=ct.price;}
+      }
+      rows.push({date:item.s.date,time:item.s.time,type:item.s.type,amt,disc,origAmt,sid:item.s.id});
+    });
+  });
+  rows.sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
+  return{rows,total:rows.reduce((s,r)=>s+r.amt,0)};
+}
+
+// ═══ ACTIONS
+async function doBook(sid,uid){
+  if(!uid)uid=currentUserId;
+  const s=schedules.find(x=>x.id===sid);if(!s)return;
+  const status=bkdCnt(sid)>=s.max?"waitlist":"booked";
+  const bk={id:"b"+(bidN++),sid,uid,status};
+  bookings.push(bk);
+  await fbSet('bookings', bk.id, bk);
+  render();
+}
+async function doCancel(sid,uid){
+  if(!uid)uid=currentUserId;
+  const s=schedules.find(x=>x.id===sid);if(!s)return;
+  if(!canCancelS(s))return;
+  const i=bookings.findIndex(b=>b.sid===sid&&b.uid===uid&&b.status==="booked");
+  if(i>-1){
+    const bid=bookings[i].id;
+    await fbDelete('bookings', bid);
+    bookings.splice(i,1);
+    const mv=s.date.slice(0,7);
+    const pst=paymentStatus(uid,mv);
+    if((pst==="confirmed"||pst==="pending")&&!refundRequests.find(r=>r.bid===bid)){
+      const ct=getCTByName(s.type);
+      const rf={id:"rf"+(rfN++),bid,uid,sid,amount:ct?ct.price:450,
+        reason:"取消課程退費（"+s.type+" "+fmtDate(s.date)+"）",status:"pending",auto:true};
+      refundRequests.push(rf);
+      await fbSet('refundRequests', rf.id, rf);
+      // Notify admin
+      const admins=users.filter(u=>u.roles.includes("admin")&&u.lineUserId);
+      const uname=users.find(u=>u.id===uid)?.name||"學員";
+      for(const a of admins){
+        await lineNotify(a.lineUserId, `⚠️ 退費申請\n${uname} 取消了 ${s.type} ${fmtDate(s.date)} ${s.time}\n退費金額：$${ct?ct.price:450}`);
+      }
+    }
+  }
+  render();
+}
+async function doCancelWait(sid,uid){
+  if(!uid)uid=currentUserId;
+  const i=bookings.findIndex(b=>b.sid===sid&&b.uid===uid&&b.status==="waitlist");
+  if(i>-1){ await fbDelete('bookings', bookings[i].id); bookings.splice(i,1); }
+  render();
+}
+function confirmCancel(sid,uid){
+  if(!uid)uid=currentUserId;
+  const s=schedules.find(x=>x.id===sid);if(!s)return;
+  const mv=s.date.slice(0,7);
+  const pst=paymentStatus(uid,mv);
+  const hasPaid=pst==="confirmed"||pst==="pending";
+  if(hasPaid){
+    const ct=getCTByName(s.type);const amt=ct?ct.price:450;
+    showModal("確認取消課程",
+      '<div class="banner yellow" style="margin-bottom:8px"><div class="bicon">⚠️</div><div><div class="btitle">已付款的課程</div><div class="bsub">取消後系統將自動送出退費申請 $'+amt+'，等待管理員審核。</div></div></div>'
+      +'<div style="padding:10px 12px;background:var(--bg);border-radius:8px;border:.5px solid var(--brd);font-size:13px"><div style="font-weight:500;margin-bottom:4px">'+s.type+'</div><div style="font-size:12px;color:var(--t3)">'+fmtDate(s.date)+' '+s.time+'</div></div>',
+      ()=>{doCancel(sid,uid);closeModal();render();},"確認取消並申請退費");
+  } else {
+    doCancel(sid,uid);
+  }
+}
+async function doStop(id){
+  const s=schedules.find(x=>x.id===id);
+  if(s){s.status="stopped";await fbUpdate('schedules',id,{status:"stopped"});}
+  render();
+}
+async function doDelete(id){
+  if(!confirm("確定刪除此課程？"))return;
+  await fbDelete('schedules',id);
+  schedules=schedules.filter(s=>s.id!==id);
+  render();
+}
+async function approveRefund(id){
+  const rf=refundRequests.find(x=>x.id===id);if(!rf)return;
+  const u=users.find(x=>x.id===rf.uid);
+  const s=schedules.find(x=>x.id===rf.sid);
+  const body='<div style="display:flex;align-items:center;gap:12px;padding:13px;background:var(--bg);border-radius:10px;border:.5px solid var(--brd)">'
+    +'<div style="width:38px;height:38px;border-radius:50%;background:'+(u?u.color:"#aaa")+';display:flex;align-items:center;justify-content:center;font-size:16px;color:#fff;font-weight:500;flex-shrink:0">'+(u?u.name[0]:"?")+'</div>'
+    +'<div><div style="font-size:14px;font-weight:500">'+(u?u.name:"—")+'</div>'
+    +'<div style="font-size:12px;color:var(--t3);margin-top:2px">'+(s?s.type+" "+fmtDate(s.date):"")+'</div></div></div>'
+    +'<div class="info-box">退費金額：<strong>$'+rf.amount.toLocaleString()+'</strong><br>原因：'+rf.reason+'</div>'
+    +'<div style="background:var(--bg);border-radius:8px;padding:11px 13px;border:.5px solid var(--brd)">'
+    +'<div style="font-size:11px;color:var(--t3);font-weight:500;margin-bottom:8px">核准後將自動發 LINE 通知給學員</div></div>';
+  showModal("核准退費 — "+(u?u.name:""),body,async ()=>{
+    rf.status="approved";
+    await fbUpdate('refundRequests', rf.id, {status:"approved"});
+    closeModal();
+    // Send real LINE notification to student
+    if(u&&u.lineUserId){
+      await lineNotify(u.lineUserId, `✅ 退費核准通知\n您的退費申請已核准！\n課程：${s?s.type:""} ${s?fmtDate(s.date):""}\n退費金額：$${rf.amount.toLocaleString()}\n款項將於近日退回，謝謝！`);
+      showModalInfo("✅ 退費已核准", '<div class="banner green"><div class="bicon">💬</div><div><div class="btitle">LINE 通知已發送</div><div class="bsub">已通知 '+(u.name)+'，退費 $'+rf.amount.toLocaleString()+' 核准。</div></div></div>');
+    } else {
+      render();
+    }
+  },"確認核准並通知");
+}
+async function rejectRefund(id){
+  const r=refundRequests.find(x=>x.id===id);if(!r)return;
+  const u=users.find(x=>x.id===r.uid);
+  if(!confirm("確定拒絕 "+(u?u.name:"")+" 的退費申請 $"+r.amount.toLocaleString()+"？"))return;
+  r.status="rejected";
+  await fbUpdate('refundRequests', r.id, {status:"rejected"});
+  render();
+}
+function adminForceConfirm(uid,mv){confirmPayment(uid,mv);}
+async function doCopyLastMonth(){
+  const p=monthView.split("-").map(Number);let py=p[0],pm=p[1]-1;if(pm<1){pm=12;py--;}
+  const pk=py+"-"+String(pm).padStart(2,"0");
+  const prev=schedules.filter(s=>s.date.startsWith(pk));
+  if(!prev.length){alert("上個月沒有課程可複製");return;}
+  let added=0;const days=new Date(p[0],p[1],0).getDate();
+  const newOnes=[];
+  prev.forEach(s=>{
+    const wd=new Date(s.date+"T00:00:00").getDay();
+    for(let d=1;d<=days;d++){
+      if(new Date(p[0],p[1]-1,d).getDay()===wd){
+        const nd=p[0]+"-"+String(p[1]).padStart(2,"0")+"-"+String(d).padStart(2,"0");
+        if(!schedules.some(x=>x.date===nd&&x.time===s.time&&x.type===s.type)){
+          const ns={id:"s-"+p[0]+"-"+p[1]+"-"+d+"-"+s.type+"-"+s.time,
+            date:nd,time:s.time,type:s.type,teacherId:s.teacherId||"t1",
+            max:s.max,min:s.min,cancelHours:s.cancelHours,status:"open",src:"copy"};
+          schedules.push(ns);newOnes.push(ns);added++;
+        }
+      }
+    }
+  });
+  for(const s of newOnes) await fbSet('schedules', s.id, s);
+  alert(added>0?"已複製 "+added+" 堂到 "+monthView:monthView+" 已有相同課程");render();
+}
+
+// ═══ TOGGLE
+function toggleExp(id){
+  expandedRows[id]=!expandedRows[id];
+  const isOpen=expandedRows[id];
+  const body=document.getElementById("expb-"+id);
+  const chev=document.getElementById("expc-"+id);
+  if(body)body.style.display=isOpen?"block":"none";
+  if(chev)chev.style.transform=isOpen?"rotate(180deg)":"rotate(0deg)";
+}
+
+// ═══ CALENDAR
+function renderCal(year,month,selD,onClickFn,prevFn,nextFn){
+  const ym=year+"-"+String(month).padStart(2,"0");
+  const first=new Date(year,month-1,1).getDay(),days=new Date(year,month,0).getDate();
+  const todayStr=NOW.toISOString().slice(0,10);
+  const dotMap={};schedules.filter(s=>s.date.startsWith(ym)).forEach(s=>{dotMap[s.date]=true;});
+  let cells="";
+  for(let i=0;i<first;i++)cells+='<div class="cal-day empty"></div>';
+  for(let d=1;d<=days;d++){
+    const ds=year+"-"+String(month).padStart(2,"0")+"-"+String(d).padStart(2,"0");
+    let cls="cal-day";if(ds===todayStr)cls+=" today";if(ds===selD)cls+=" sel";
+    const hk=_h(()=>{ if(onClickFn==="setSelDate")setSelDate(ds);
+                       else if(onClickFn==="setTeacherSelDate")setTeacherSelDate(ds);
+                       else if(onClickFn==="setAdminSelDate")setAdminSelDate(ds); });
+    cells+='<div class="'+cls+'" onclick="_H.'+hk+'()"><div class="cal-dn">'+d+'</div>'
+      +'<div class="cdot-row">'+(dotMap[ds]?'<div class="cdot"></div>':"")+'</div></div>';
+  }
+  const pk=_h(prevFn),nk=_h(nextFn);
+  return '<div class="cal-wrap"><div class="cal-hd">'
+    +'<button class="cnav" onclick="_H.'+pk+'()">‹</button>'
+    +'<span class="cal-mon">'+fmtYM(year,month)+'</span>'
+    +'<button class="cnav" onclick="_H.'+nk+'()">›</button></div>'
+    +'<div class="cal-grid">'+"日一二三四五六".split("").map(w=>'<div class="cal-wd">'+w+'</div>').join("")+cells
+    +'</div></div>';
+}
+function setSelDate(d){selDate=d;render();}
+function setTeacherSelDate(d){teacherSelDate=d;render();}
+function setAdminSelDate(d){adminSelDate=d;render();}
+function calPrev(){calM--;if(calM<1){calM=12;calY--;}render();}
+function calNext(){calM++;if(calM>12){calM=1;calY++;}render();}
+function tcalPrev(){tcalM--;if(tcalM<1){tcalM=12;tcalY--;}render();}
+function tcalNext(){tcalM++;if(tcalM>12){tcalM=1;tcalY++;}render();}
+function acalPrev(){acalM--;if(acalM<1){acalM=12;acalY--;}render();}
+function acalNext(){acalM++;if(acalM>12){acalM=1;acalY++;}render();}
+function mvPrev(){const p=monthView.split("-").map(Number);let y=p[0],m=p[1]-1;if(m<1){m=12;y--;}monthView=y+"-"+String(m).padStart(2,"0");render();}
+function mvNext(){const p=monthView.split("-").map(Number);let y=p[0],m=p[1]+1;if(m>12){m=1;y++;}monthView=y+"-"+String(m).padStart(2,"0");render();}
+
+// ═══ COURSE CARD (student)
+function renderCC(s,uid,showActions){
+  const cnt=bkdCnt(s.id),wl=waitCnt(s.id),full=cnt>=s.max,pct=Math.round(cnt/s.max*100);
+  const booked=uid?uBooked(s.id,uid):null,waited=uid?uWait(s.id,uid):null;
+  const ct=getCTByName(s.type);const ctColor=ct?ct.color:"#7a9db5",ctIcon=ct?ct.icon:"📌";
+  const tname=getTname(s.teacherId),tcolor=getTcolor(s.teacherId);
+  const rk="sc-"+s.id,isOpen=!!expandedRows[rk];
+  // Show ALL booked students to everyone (not just classmates after booking)
+  const allBookedStuds=bookings.filter(b=>b.sid===s.id&&b.status==="booked").map(b=>users.find(u=>u.id===b.uid)).filter(Boolean);
+  // For already-booked: show "classmates" label, for not-yet-booked: show "已預約名單"
+  const peekLabel=booked?"同班同學":"已預約";
+  let badge="",action="";
+  if(booked)badge='<span class="sp sp-booked">已預約</span>';
+  else if(waited)badge='<span class="sp sp-wait">候補中</span>';
+  else if(full)badge='<span class="sp sp-full">已滿</span>';
+  else badge='<span class="sp sp-open">可預約</span>';
+  if(showActions&&uid){
+    if(booked){
+      const dis=canCancelS(s);
+      const mv=s.date.slice(0,7);const hasPaid=["confirmed","pending"].includes(paymentStatus(uid,mv));
+      const lbl=hasPaid?"取消並申請退費":"取消";
+      const cls=hasPaid?"btn btn-rf":"btn btn-c";
+      const hk=_h(()=>{if(dis){if(hasPaid)confirmCancel(s.id,uid);else doCancel(s.id,uid);}});
+      action='<button class="'+cls+'"'+(dis?"":' disabled')+'onclick="_H.'+hk+'()">'+lbl+'</button>';
+    } else if(waited){
+      const hk=_h(()=>doCancelWait(s.id,uid));
+      action='<button class="btn btn-c" onclick="_H.'+hk+'()">取消候補</button>';
+    } else if(full){
+      const hk=_h(()=>doBook(s.id,uid));
+      action='<button class="btn btn-w" onclick="_H.'+hk+'()">候補</button>';
+    } else {
+      const hk=_h(()=>doBook(s.id,uid));
+      action='<button class="btn btn-p" onclick="_H.'+hk+'()">預約</button>';
+    }
+  }
+  const showPeek=allBookedStuds.length>0;
+  const cmChips=allBookedStuds.map(u=>'<span class="chip"><span class="chip-av" style="background:'+u.color+'">'+u.name[0]+'</span>'+u.name+'</span>').join("");
+  const peekHk=showPeek?_h(()=>toggleExp(rk)):"";
+  const peekBtn=showPeek?'<span onclick="_H.'+peekHk+'()" style="font-size:10px;color:var(--mb5);cursor:pointer;padding:1px 6px;background:var(--mb1);border-radius:10px">'+peekLabel+' '+allBookedStuds.length+' 人 <span id="expc-'+rk+'" style="display:inline-block;transition:transform .2s">'+(isOpen?"▲":"▼")+'</span></span>':"";
+  const expandSection=showPeek?'<div class="cc-exp'+(isOpen?" open":"")+'" id="expb-'+rk+'" style="'+(isOpen?"":"display:none")+'"><div style="font-size:10px;color:var(--t3);margin-bottom:6px">'+peekLabel+'名單</div><div class="chips">'+cmChips+'</div></div>':"";
+  return '<div class="cc"><div class="cc-main"><div class="cc-bar" style="background:linear-gradient(180deg,'+ctColor+','+ctColor+'bb)"></div>'
+    +'<div class="cc-body"><div class="cc-icon" style="background:'+ctColor+'22">'+ctIcon+'</div>'
+    +'<div class="cc-info"><div class="cc-name">'+s.type+'</div>'
+    +'<div class="cc-tline"><div class="cc-tdot" style="background:'+tcolor+'">'+tname[0]+'</div>'+tname+'</div>'
+    +'<div class="cc-meta"><span class="cc-time">'+s.time+'</span>'
+    +'<span class="cap"><span class="cap-f" style="width:'+pct+'%"></span></span>'
+    +'<span class="cc-spots'+(cnt>=s.max-1?" few":"")+'">'+cnt+'/'+s.max+(wl?' · 候補'+wl:"")+'</span>'
+    +peekBtn+'</div></div>'
+    +'<div class="cc-right">'+badge+(action?'<div style="margin-top:4px">'+action+'</div>':"")+'</div>'
+    +'</div></div>'+expandSection+'</div>';
+}
+
+// ═══ EXP ROW (teacher/admin)
+function renderExpRow(s,rowKey,adminBtns){
+  const cnt=bkdCnt(s.id),wl=waitCnt(s.id);
+  const ct=getCTByName(s.type);const ctColor=ct?ct.color:"#7a9db5";
+  const tname=getTname(s.teacherId),tcolor=getTcolor(s.teacherId);
+  const isOpen=!!expandedRows[rowKey];
+  const studs=bookings.filter(b=>b.sid===s.id&&b.status==="booked").map(b=>users.find(u=>u.id===b.uid)).filter(Boolean);
+  const waits=bookings.filter(b=>b.sid===s.id&&b.status==="waitlist").map(b=>users.find(u=>u.id===b.uid)).filter(Boolean);
+  const stBadge=s.status==="stopped"?'<span class="sp sp-stop">已停課</span>':cnt>=s.min?'<span class="sp sp-booked">開班中</span>':'<span class="sp sp-wait">待開班</span>';
+  const chips=studs.length===0?'<span style="font-size:12px;color:var(--t3)">尚無學員</span>':studs.map(u=>'<span class="chip"><span class="chip-av" style="background:'+u.color+'">'+u.name[0]+'</span>'+u.name+'</span>').join("");
+  const wlSec=waits.length>0?'<div class="wl-sec"><div class="wl-lbl">候補名單</div><div class="chips">'+waits.map(u=>'<span class="chip" style="border-color:var(--sage);background:var(--sl)"><span class="chip-av" style="background:'+u.color+'">'+u.name[0]+'</span>'+u.name+'</span>').join("")+'</div></div>':"";
+  let abtns="";
+  if(adminBtns){
+    const hAdd=_h(()=>openAddStudent(s.id));
+    const hStop=_h(()=>doStop(s.id));
+    const hDel=_h(()=>doDelete(s.id));
+    const hEdit=_h(()=>openEditCourse(s.id));
+    abtns='<div style="margin-top:10px;display:flex;gap:5px;flex-wrap:wrap;padding-top:8px;border-top:.5px solid var(--brd)">'
+      +'<button class="act" onclick="_H.'+hEdit+'()">⚙ 編輯</button>'
+      +'<button class="act act-ok" onclick="_H.'+hAdd+'()">＋ 加入學員</button>'
+      +(s.status==="open"?'<button class="act" onclick="_H.'+hStop+'()">停課</button>':"")
+      +'<button class="act act-del" onclick="_H.'+hDel+'()">刪除</button></div>';
+  }
+  const hk=_h(()=>toggleExp(rowKey));
+  return '<div class="exp-row"><div class="exp-hd" onclick="_H.'+hk+'()">'
+    +'<div class="exp-bar" style="background:linear-gradient(180deg,'+ctColor+','+ctColor+'bb)"></div>'
+    +'<div class="exp-inf"><div class="exp-title">'+s.type+'</div>'
+    +'<div class="exp-sub"><span>'+fmtDate(s.date)+' '+s.time+'</span>'
+    +'<span style="display:inline-flex;align-items:center;gap:3px"><span style="width:8px;height:8px;border-radius:50%;background:'+tcolor+';display:inline-block"></span>'+tname+'</span>'
+    +stBadge+'</div></div>'
+    +'<div class="exp-right"><span class="exp-cnt">'+cnt+'/'+s.max+(wl>0?' · 候補'+wl:"")+'</span>'
+    +'<span id="expc-'+rowKey+'" class="exp-chev" style="'+(isOpen?"transform:rotate(180deg)":"")+'">▼</span>'
+    +'</div></div>'
+    +'<div class="exp-body'+(isOpen?" open":"")+'" id="expb-'+rowKey+'" style="display:'+(isOpen?"block":"none")+'">'
+    +'<div class="chips">'+chips+'</div>'+wlSec+abtns+'</div></div>';
+}
+
+// ═══ STUDENT PAGES
+function pageCalendar(uid){
+  const dc=onDate(selDate);
+  const canBook=activeRole==="student";
+  return renderCal(calY,calM,selDate,"setSelDate",calPrev,calNext)
+    +'<div style="display:flex;align-items:center;justify-content:space-between">'
+    +'<span class="sec-title">'+fmtDate(selDate)+' 課程</span>'
+    +'<span style="font-size:11px;color:var(--t3)">點日期切換</span></div>'
+    +(dc.length===0?'<div class="empty">這天沒有課程</div>':dc.map(s=>renderCC(s,uid,canBook)).join(""));
+}
+function pageMyBookings(uid){
+  const myAll=bookings.filter(b=>b.uid===uid&&b.status!=="cancelled");
+  const up=myAll.filter(b=>{const s=schedules.find(x=>x.id===b.sid);return s&&new Date(s.date+"T"+s.time+":00")>NOW;})
+    .sort((a,b)=>{const sa=schedules.find(x=>x.id===a.sid),sb=schedules.find(x=>x.id===b.sid);return ((sa?sa.date+sa.time:"")).localeCompare(sb?sb.date+sb.time:"");});
+  const past=myAll.filter(b=>{const s=schedules.find(x=>x.id===b.sid);return s&&new Date(s.date+"T"+s.time+":00")<=NOW;})
+    .sort((a,b)=>{const sa=schedules.find(x=>x.id===a.sid),sb=schedules.find(x=>x.id===b.sid);return ((sb?sb.date+sb.time:"")).localeCompare(sa?sa.date+sa.time:"");});
+  const myRfs=refundRequests.filter(r=>r.uid===uid&&r.status!=="rejected");
+  const row=b=>{
+    const s=schedules.find(x=>x.id===b.sid);if(!s)return "";
+    const isFuture=new Date(s.date+"T"+s.time+":00")>NOW;
+    const ct=getCTByName(s.type);const ctColor=ct?ct.color:"#7a9db5";
+    const isWait=b.status==="waitlist";
+    const cancelable=canCancelS(s);const ch=s.cancelHours!=null?s.cancelHours:cfg.cancelHours;
+    let rightBtn="";
+    if(isFuture&&!isWait&&cancelable){
+      const mv=s.date.slice(0,7);const hasPaid=["confirmed","pending"].includes(paymentStatus(uid,mv));
+      const lbl=hasPaid?"取消並申請退費":"取消";
+      const cls=hasPaid?"btn btn-rf":"btn btn-c";
+      const hk=_h(()=>{if(hasPaid)confirmCancel(s.id,uid);else doCancel(s.id,uid);});
+      rightBtn='<button class="'+cls+'" onclick="_H.'+hk+'()">'+lbl+'</button>';
+    } else if(isFuture&&isWait){
+      const hk=_h(()=>doCancelWait(s.id,uid));
+      rightBtn='<button class="btn btn-c" onclick="_H.'+hk+'()">取消候補</button>';
+    }
+    return '<div style="background:var(--sur);border-radius:10px;border:.5px solid var(--brd);overflow:hidden;display:flex">'
+      +'<div style="width:4px;flex-shrink:0;background:linear-gradient(180deg,'+ctColor+','+ctColor+'bb)"></div>'
+      +'<div style="flex:1;padding:11px 13px;display:flex;align-items:center;gap:11px">'
+      +'<div style="width:34px;height:34px;border-radius:9px;background:'+ctColor+'22;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0">'+(ct?ct.icon:"📌")+'</div>'
+      +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500;color:var(--t1);margin-bottom:2px">'+s.type+'</div>'
+      +'<div style="font-size:12px;color:var(--mb5);font-weight:500;margin-bottom:2px">'+fmtDate(s.date)+'</div>'
+      +'<div style="font-size:11px;color:var(--t3);display:flex;gap:6px;flex-wrap:wrap">'
+      +'<span>'+s.time+'</span><span>'+getTname(s.teacherId)+'</span>'
+      +(isWait?'<span class="sp sp-wait" style="font-size:10px">候補中</span>':"")
+      +(!isFuture&&!isWait?'<span class="sp sp-stop" style="font-size:10px">已上課</span>':"")
+      +(isFuture&&!cancelable&&!isWait?'<span style="font-size:10px;color:var(--sand)">前 '+ch+'h 不可取消</span>':"")
+      +'</div></div>'+(rightBtn?'<div style="flex-shrink:0;margin-left:4px">'+rightBtn+'</div>':"")
+      +'</div></div>';
+  };
+  let rfSection="";
+  if(myRfs.length>0){
+    rfSection='<div class="sec-title" style="margin-top:4px">退費申請狀態</div>'
+      +myRfs.map(rf=>{
+        const s=schedules.find(x=>x.id===rf.sid);
+        const badge=rf.status==="pending"?'<span class="sp sp-rf">審核中</span>':'<span class="sp sp-paid">已核准</span>';
+        return '<div class="bill-row"><div><div class="br-type">'+(s?s.type:"課程")+(rf.auto?" · 取消退費":" · 手動申請")+'</div>'
+          +'<div class="br-date">'+(s?fmtDate(s.date):"")+'　退費 $'+rf.amount+'</div></div>'+badge+'</div>';
+      }).join("");
+  }
+  return '<div class="sec-title">即將上課（'+up.length+' 堂）</div>'
+    +(up.length===0?'<div class="info-box">尚無即將上課的課程</div>':up.map(row).join(""))
+    +(past.length>0?'<div class="sec-title" style="margin-top:8px">已上課（'+past.length+' 堂）</div>'+past.slice(0,5).map(row).join(""):"")
+    +rfSection;
+}
+function pageBilling(uid){
+  const{rows,total}=computeBilling(uid,monthView);
+  const pst=paymentStatus(uid,monthView);const pdata=getPayment(uid,monthView);
+  let banner="";
+  if(pst==="confirmed")banner='<div class="banner green"><div class="bicon">✅</div><div><div class="btitle">付款已確認</div><div class="bsub">確認金額：$'+pdata.paidAmount.toLocaleString()+'</div></div></div>';
+  else if(pst==="changed")banner='<div class="banner yellow"><div class="bicon">⚠️</div><div><div class="btitle">費用已變動，需重新確認</div><div class="bsub">原 $'+pdata.paidAmount.toLocaleString()+'，應繳 $'+total.toLocaleString()+'，差 $'+(total-pdata.paidAmount).toLocaleString()+'，請補繳後重新通知</div></div></div>';
+  else if(pst==="pending")banner='<div class="banner blue"><div class="bicon">🕐</div><div><div class="btitle">已通知管理員，等待確認中</div><div class="bsub">申報金額：$'+pdata.paidAmount.toLocaleString()+'</div></div></div>';
+  const nhk=_h(()=>notifyPayment(uid,monthView));
+  let payBtn="";
+  if(pst==="none"||pst==="changed"){
+    const lbl=pst==="changed"?"重新通知管理員（已補繳）":"我已完成匯款，通知管理員";
+    payBtn='<button class="big-btn" onclick="_H.'+nhk+'()"><span>📣</span> '+lbl+'</button>';
+  } else if(pst==="pending"){
+    payBtn='<button class="big-btn" disabled>⏳ 已通知，等待管理員確認</button>';
+  } else if(pst==="confirmed"){
+    payBtn='<div style="text-align:center;font-size:12px;color:#4a8a4a;padding:8px">✅ 付款完成</div>';
+  }
+  const copyhk=_h(()=>copyAccount());
+  return banner
+    +'<div class="bh"><div style="font-size:11px;color:rgba(255,255,255,.45);margin-bottom:4px;letter-spacing:.08em">本月應付金額</div>'
+    +'<div class="bh-amt">$'+total.toLocaleString()+'</div>'
+    +'<div class="bh-sub">共 '+rows.length+' 堂課'+(pst==="changed"?" ⚠ 已變動":"")+'</div></div>'
+    +'<div class="sec-title">費用明細</div>'
+    +(rows.length===0?'<div class="info-box">本月尚無課程費用</div>':rows.map(r=>'<div class="bill-row"><div><div class="br-type">'+r.type+'</div><div class="br-date">'+fmtDate(r.date)+' '+r.time+(r.disc?"　同日優惠":"")+'</div></div><div style="text-align:right"><div class="br-amt'+(r.disc?" disc":"")+'">$'+r.amt+'</div>'+(r.disc?'<div class="disc-note">原 $'+r.origAmt+' → $'+r.amt+'</div>':"")+'</div></div>').join(""))
+    +'<div class="pay-card"><div class="pay-hd"><span style="font-size:15px">🏦</span><span class="pay-hdt">付款資訊</span>'
+    +(pst==="confirmed"?'<span class="sp sp-paid" style="margin-left:auto">已確認</span>':pst==="pending"?'<span class="sp sp-pend" style="margin-left:auto">待確認</span>':"")
+    +'</div><div class="pay-body">'
+    +'<div class="pay-ar"><span class="pa-lbl">本月應繳</span><span class="pa-amt">$'+total.toLocaleString()+'</span></div>'
+    +'<div class="pay-br"><div><div style="font-size:11px;color:var(--t3);margin-bottom:2px">'+cfg.bankName+'（'+cfg.bankCode+'）</div>'
+    +'<div class="pay-acc">'+cfg.account+'</div><div style="font-size:11px;color:var(--t3);margin-top:2px">戶名：'+cfg.payee+'</div></div>'
+    +'<button class="copy-btn" id="copybtn" onclick="_H.'+copyhk+'()">複製帳號</button></div>'
+    +'<div class="pay-div"></div><div class="pay-note">'+cfg.note.replace(/\n/g,"<br>")+'</div>'
+    +(payBtn?'<div>'+payBtn+'</div>':"")
+    +'</div></div>';
+}
+function copyAccount(){
+  try{navigator.clipboard.writeText(cfg.account);}catch(e){}
+  const btn=document.getElementById("copybtn");
+  if(btn){btn.textContent="✓ 已複製";btn.classList.add("copied");setTimeout(()=>{btn.textContent="複製帳號";btn.classList.remove("copied");},2000);}
+}
+
+// ═══ TEACHER PAGE
+function pageTeacher(){
+  const dc=onDate(teacherSelDate);
+  const up=schedules.filter(s=>s.status==="open"&&s.date>teacherSelDate).sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time)).slice(0,8);
+  return renderCal(tcalY,tcalM,teacherSelDate,"setTeacherSelDate",tcalPrev,tcalNext)
+    +'<div class="sec-title">'+fmtDate(teacherSelDate)+' 課程名單</div>'
+    +(dc.length===0?'<div class="info-box">'+fmtDate(teacherSelDate)+' 沒有課程</div>':dc.map(s=>renderExpRow(s,"t-"+s.id,false)).join(""))
+    +'<div class="sec-title" style="margin-top:4px">即將開課</div>'
+    +(up.length===0?'<div class="info-box">暫無課程</div>':up.map(s=>renderExpRow(s,"tu-"+s.id,false)).join(""));
+}
+
+// ═══ ADMIN COURSES
+function pageAdminCourses(){
+  const ms=mSch(),grp=gByD(ms),dates=Object.keys(grp).sort();
+  const totalRev=getStudents().reduce((s,u)=>s+computeBilling(u.id).total,0);
+  const dcAdmin=onDate(adminSelDate);
+  const stats=[["本月課程",ms.length+"","堂",true],["本月預約",bookings.filter(b=>b.status==="booked").length+"","人次",false],
+    ["平均滿班率",(ms.length?Math.round(ms.reduce((s,c)=>s+bkdCnt(c.id),0)/ms.length/8*100):0)+"%","",false],
+    ["預估收入","$"+totalRev.toLocaleString(),"",false]];
+  const mvph=_h(mvPrev),mvnh=_h(mvNext),addch=_h(openAddCourse),cpyh=_h(doCopyLastMonth);
+  return '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px">'
+    +stats.map(([l,v,u,hl])=>'<div style="background:'+(hl?"var(--mb7)":"var(--sur)")+';border-radius:8px;border:.5px solid '+(hl?"var(--mb7)":"var(--brd)")+';padding:11px 13px">'
+      +'<div style="font-size:11px;color:'+(hl?"rgba(255,255,255,.4)":"var(--t3)")+';margin-bottom:3px">'+l+'</div>'
+      +'<div style="font-size:20px;font-weight:500;color:'+(hl?"#fff":"var(--t1)")+'">'+v+'</div>'
+      +(u?'<div style="font-size:11px;color:'+(hl?"rgba(255,255,255,.3)":"var(--t3)")+'">'+u+'</div>':"")
+      +'</div>').join("")+'</div>'
+    +renderCal(acalY,acalM,adminSelDate,"setAdminSelDate",acalPrev,acalNext)
+    +'<div style="display:flex;align-items:center;justify-content:space-between">'
+    +'<span class="sec-title">'+fmtDate(adminSelDate)+' 名單</span>'
+    +'<span style="font-size:11px;color:var(--t3)">點月曆切換</span></div>'
+    +(dcAdmin.length===0?'<div class="info-box">'+fmtDate(adminSelDate)+' 沒有課程</div>':dcAdmin.map(s=>renderExpRow(s,"a-"+s.id,true)).join(""))
+    +'<div class="toolbar"><div class="mv-wrap">'
+    +'<button class="mv-btn" onclick="_H.'+mvph+'()">‹</button>'
+    +'<span class="mv-lbl">'+mvLabel()+'</span>'
+    +'<button class="mv-btn" onclick="_H.'+mvnh+'()">›</button></div>'
+    +'<div class="tool-acts">'
+    +'<button class="btn-add" onclick="_H.'+addch+'()">＋ 新增課程</button>'
+    +'<button class="btn-copy" onclick="_H.'+cpyh+'()">📋 複製上月</button>'
+    +'</div></div>'
+    +'<div class="sec-title">本月課程總覽</div>'
+    +(dates.length===0?'<div class="info-box">本月尚無課程</div>':dates.map(date=>{
+      const dayLbl='<div style="font-size:11px;font-weight:500;color:var(--mb6);padding:6px 2px 4px;letter-spacing:.05em">'+fmtDate(date)+'</div>';
+      const cards=grp[date].map(s=>{
+        const cnt=bkdCnt(s.id),ct=getCTByName(s.type),ctColor=ct?ct.color:"#7a9db5";
+        const ch=s.cancelHours!=null?s.cancelHours:cfg.cancelHours;
+        const pct=Math.round(cnt/s.max*100);
+        const stBadge=s.status==="stopped"?'<span class="sp sp-stop">已停課</span>':cnt>=s.min?'<span class="sp sp-booked">開班中</span>':'<span class="sp sp-wait">待開班</span>';
+        const studs=bookings.filter(b=>b.sid===s.id&&b.status==="booked").map(b=>users.find(u=>u.id===b.uid)).filter(Boolean);
+        const waits=bookings.filter(b=>b.sid===s.id&&b.status==="waitlist").map(b=>users.find(u=>u.id===b.uid)).filter(Boolean);
+        const rk="ao-"+s.id,isOpen=!!expandedRows[rk];
+        const thk=_h(()=>toggleExp(rk));
+        const ehk=_h(()=>openEditCourse(s.id));
+        const ahk=_h(()=>openAddStudent(s.id));
+        const shk=_h(()=>doStop(s.id));
+        const dhk=_h(()=>doDelete(s.id));
+        return '<div class="exp-row" style="margin-bottom:6px">'
+          +'<div class="exp-hd" onclick="_H.'+thk+'()">'
+          +'<div class="exp-bar" style="background:linear-gradient(180deg,'+ctColor+','+ctColor+'bb)"></div>'
+          +'<div class="exp-inf"><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">'
+          +'<span style="font-size:13px;font-weight:500;color:var(--t1)">'+s.type+'</span>'
+          +'<span style="font-size:11px;color:var(--t3)">'+s.time+'</span>'
+          +'<span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;color:var(--t3)"><span style="width:8px;height:8px;border-radius:50%;background:'+getTcolor(s.teacherId)+';display:inline-block;flex-shrink:0"></span>'+getTname(s.teacherId)+'</span>'
+          +stBadge+'</div>'
+          +'<div style="display:flex;align-items:center;gap:6px;margin-top:3px">'
+          +'<div class="cap"><div class="cap-f" style="width:'+pct+'%"></div></div>'
+          +'<span style="font-size:11px;color:var(--t3)">'+cnt+'/'+s.max+'</span>'
+          +'<span style="font-size:10px;color:var(--t3)">截止 '+ch+'h 前</span>'
+          +'</div></div>'
+          +'<span id="expc-'+rk+'" class="exp-chev" style="'+(isOpen?"transform:rotate(180deg)":"")+'">▼</span>'
+          +'</div>'
+          +'<div class="exp-body'+(isOpen?" open":"")+'" id="expb-'+rk+'" style="display:'+(isOpen?"block":"none")+'">'
+          +'<div style="font-size:10px;color:var(--t3);margin-bottom:5px">已報名學員</div>'
+          +'<div class="chips" style="margin-bottom:8px">'+(studs.length===0?'<span style="font-size:12px;color:var(--t3)">尚無學員</span>':studs.map(u=>'<span class="chip"><span class="chip-av" style="background:'+u.color+'">'+u.name[0]+'</span>'+u.name+'</span>').join(""))+'</div>'
+          +(waits.length>0?'<div style="font-size:10px;color:var(--t3);margin-bottom:4px">候補</div><div class="chips" style="margin-bottom:8px">'+waits.map(u=>'<span class="chip" style="border-color:var(--sage);background:var(--sl)"><span class="chip-av" style="background:'+u.color+'">'+u.name[0]+'</span>'+u.name+'</span>').join("")+'</div>':"")
+          +'<div style="display:flex;gap:5px;flex-wrap:wrap;padding-top:6px;border-top:.5px solid var(--brd)">'
+          +'<button class="act" onclick="_H.'+ehk+'()">⚙ 編輯</button>'
+          +'<button class="act act-ok" onclick="_H.'+ahk+'()">＋ 加入學員</button>'
+          +(s.status==="open"?'<button class="act" onclick="_H.'+shk+'()">停課</button>':"")
+          +'<button class="act act-del" onclick="_H.'+dhk+'()">刪除</button>'
+          +'</div></div></div>';
+      }).join("");
+      return dayLbl+cards;
+    }).join(""));
+}
+
+// ═══ ADMIN STATS
+function pageAdminStats(){
+  const allStuds=getStudents();
+  const sq=_statsSearch.trim().toLowerCase();
+  const studs=sq?allStuds.filter(u=>u.name.toLowerCase().includes(sq)):allStuds;
+  const allMonths=new Set();
+  bookings.forEach(b=>{const s=schedules.find(x=>x.id===b.sid);if(s)allMonths.add(s.date.slice(0,7));});
+  payments.forEach(p=>allMonths.add(p.month));
+  const sortedM=[...allMonths].sort().reverse();
+  if(!sortedM.includes(monthView)&&sortedM.length)monthView=sortedM[0];
+  const allTotal=studs.reduce((s,u)=>s+computeBilling(u.id,monthView).total,0);
+  const pendingStuds=allStuds.filter(u=>paymentStatus(u.id,monthView)==="pending");
+  const changedStuds=allStuds.filter(u=>paymentStatus(u.id,monthView)==="changed");
+  const pendingRfs=refundRequests.filter(r=>r.status==="pending");
+  let html="";
+  if(pendingStuds.length>0){
+    html+='<div class="banner yellow"><div class="bicon">🔔</div><div style="flex:1"><div class="btitle">有學員通知付款（'+pendingStuds.length+' 位）</div>'
+      +pendingStuds.map(u=>{const{total}=computeBilling(u.id,monthView);const p=getPayment(u.id,monthView);
+        const hk=_h(()=>openConfirmPayment(u.id,monthView));
+        return '<div style="display:flex;align-items:center;gap:8px;padding:7px 9px;background:rgba(255,255,255,.6);border-radius:7px;margin-top:5px">'
+          +'<div style="width:20px;height:20px;border-radius:50%;background:'+u.color+';display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff;flex-shrink:0">'+u.name[0]+'</div>'
+          +'<div style="flex:1;font-size:12px">'+u.name+' 申報 <strong>$'+(p?p.paidAmount.toLocaleString():"0")+'</strong>'+(p&&p.paidAmount!==total?' (應繳 $'+total.toLocaleString()+')':"")+'</div>'
+          +'<button class="act act-gr" onclick="_H.'+hk+'()">確認</button></div>';}).join("")
+      +'</div></div>';
+  }
+  if(changedStuds.length>0)
+    html+='<div class="banner red"><div class="bicon">⚠️</div><div><div class="btitle">費用有變動</div><div class="bsub">'+changedStuds.map(u=>u.name).join("、")+' 的預約增加，需重新確認</div></div></div>';
+  if(pendingRfs.length>0){
+    html+='<div class="banner purple"><div class="bicon">💜</div><div style="flex:1"><div class="btitle">待處理退費申請（'+pendingRfs.length+' 件）</div>'
+      +pendingRfs.map(rf=>{
+        const u=users.find(x=>x.id===rf.uid);const s=schedules.find(x=>x.id===rf.sid);
+        const ahk=_h(()=>approveRefund(rf.id));const rhk=_h(()=>rejectRefund(rf.id));
+        return '<div style="display:flex;align-items:center;gap:8px;padding:7px 9px;background:rgba(255,255,255,.6);border-radius:7px;margin-top:5px">'
+          +'<div style="flex:1;font-size:12px">'+(u?u.name:"—")+' · '+(s?s.type:"")+(s?' '+fmtDate(s.date):"")+'　<strong>$'+rf.amount+'</strong>'+(rf.auto?' (取消退費)':"")+'</div>'
+          +'<div style="display:flex;gap:4px"><button class="act act-gr" onclick="_H.'+ahk+'()">核准</button>'
+          +'<button class="act act-del" onclick="_H.'+rhk+'()">拒絕</button></div></div>';}).join("")
+      +'</div></div>';
+  }
+  // month selector
+  const mChk=_h(e=>{monthView=document.getElementById("mv-sel").value;render();});
+  const monthOpts=sortedM.length?sortedM.map(m=>'<option value="'+m+'"'+(m===monthView?' selected':'')+'>'+m.replace('-',' 年 ')+'月</option>').join(""):'<option value="'+monthView+'">'+monthView+'</option>';
+  html+='<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">'
+    +'<div style="display:flex;align-items:center;gap:8px"><span class="sec-title">費用明細</span>'
+    +'<select id="mv-sel" onchange="_H.'+mChk+'()" style="padding:5px 10px;border-radius:8px;border:.5px solid var(--brd);background:var(--bg);font-size:12px;font-family:inherit;color:var(--t1);outline:none">'+monthOpts+'</select></div>'
+    +'<div style="display:flex;gap:6px;align-items:center">'
+    +'<div class="srch-wrap" style="width:auto"><input id="stats-search" type="text" value="'+_statsSearch+'" placeholder="搜尋學員…" oninput="window._setStatsSearch(this.value)" style="font-size:12px;padding:6px 28px 6px 10px;width:120px"><span class="srch-ico">🔍</span></div>'
+    +(sq?(()=>{const clhk=_h(()=>{window._setStatsSearch("");});return '<button onclick="_H.'+clhk+'()" style="padding:5px 9px;border-radius:6px;border:.5px solid var(--brd);background:var(--sur);font-size:11px;cursor:pointer;color:var(--t3);font-family:inherit">清除</button>';})():"")
+    +'</div></div>'
+    +'<div id="stats-table-wrap">'+buildStatsTable(studs,allTotal,sq)+'</div>'
+    +'<div class="sec-title" style="margin-top:12px">會員管理</div>'
+    +'<div class="tblw"><table class="at"><thead><tr>'+["姓名","角色","本月","操作"].map(h=>'<th>'+h+'</th>').join("")+'</tr></thead><tbody>'
+    +users.map(u=>{const ehk=_h(()=>openEditRole(u.id));
+      return '<tr><td><div style="display:flex;align-items:center;gap:6px">'
+        +'<div style="width:20px;height:20px;border-radius:50%;background:'+u.color+';display:flex;align-items:center;justify-content:center;font-size:9px;color:#fff">'+u.name[0]+'</div>'+u.name+'</div></td>'
+        +'<td><div class="rdisp">'+u.roles.map(r=>'<span class="rc '+r+'">'+RL[r]+'</span>').join("")+'</div></td>'
+        +'<td>'+(u.roles.includes("student")?computeBilling(u.id,monthView).rows.length+'堂':"—")+'</td>'
+        +'<td><button class="act" onclick="_H.'+ehk+'()">編輯</button></td></tr>';}).join("")
+    +'</tbody></table></div>';
+  return html;
+}
+function buildStatsTable(studs,allTotal,sq){
+  return '<div class="tblw"><table class="at"><thead><tr>'+["學員","堂數","應收","申報","狀態","操作"].map(h=>'<th>'+h+'</th>').join("")+'</tr></thead><tbody>'
+    +(studs.length===0?'<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--t3)">找不到「'+sq+'」</td></tr>':
+      studs.map(u=>{const{rows,total}=computeBilling(u.id,monthView);const pst=paymentStatus(u.id,monthView);const pdata=getPayment(u.id,monthView);
+        const stCell=pst==="confirmed"?'<span class="sp sp-paid">已收款</span>':pst==="pending"?'<span class="sp sp-pend">待確認</span>':pst==="changed"?'<span class="sp sp-chg">變動</span>':'<span class="sp sp-wait">待收款</span>';
+        const chk=_h(()=>openConfirmPayment(u.id,monthView));const fhk=_h(()=>adminForceConfirm(u.id,monthView));
+        const actCell=pst==="pending"||pst==="changed"?'<button class="act act-gr" onclick="_H.'+chk+'()">確認</button>':pst==="confirmed"?'<span style="font-size:11px;color:var(--t3)">完成</span>':'<button class="act" onclick="_H.'+fhk+'()">直接確認</button>';
+        const paidAmt=pdata?pdata.paidAmount:null;const mm=paidAmt!=null&&paidAmt!==total;
+        return '<tr><td><div style="display:flex;align-items:center;gap:5px">'
+          +'<div style="width:18px;height:18px;border-radius:50%;background:'+u.color+';display:flex;align-items:center;justify-content:center;font-size:9px;color:#fff;flex-shrink:0">'+u.name[0]+'</div>'+u.name+'</div></td>'
+          +'<td>'+rows.length+'</td><td style="font-weight:500;color:var(--mb6)">$'+total.toLocaleString()+'</td>'
+          +'<td style="font-size:12px;color:'+(mm?"#c44":"var(--t3)")+'">'+( paidAmt!=null?"$"+paidAmt.toLocaleString()+(mm?" ⚠":""):"—")+'</td>'
+          +'<td>'+stCell+'</td><td>'+actCell+'</td></tr>';}).join(""))
+    +'<tr style="background:var(--bg)"><td>合計'+(sq?" (篩選)":"")+'</td><td>'+studs.reduce((s,u)=>s+computeBilling(u.id,monthView).rows.length,0)+'</td>'
+    +'<td style="font-weight:500;color:var(--mb6)">$'+allTotal.toLocaleString()+'</td><td></td><td></td><td></td></tr></tbody></table></div>';
+}
+function updateStatsTable(){
+  const el=document.getElementById("stats-table-wrap");if(!el)return;
+  const sq=_statsSearch.trim().toLowerCase();const allStuds=getStudents();
+  const studs=sq?allStuds.filter(u=>u.name.toLowerCase().includes(sq)):allStuds;
+  el.innerHTML=buildStatsTable(studs,studs.reduce((s,u)=>s+computeBilling(u.id,monthView).total,0),sq);
+}
+
+// ═══ SETTINGS
+function pageSettings(){
+  return '<div class="ss"><div class="s-hd"><span style="font-size:16px">🎯</span><span class="s-hdt">課程類型管理</span></div>'
+    +'<div class="s-body"><div class="info-box">每種課程類型可設定定價、人數上限與同日優惠。</div>'
+    +'<div style="display:flex;flex-direction:column;gap:8px">'
+    +courseTypes.map(ct=>{const partner=ct.comboWith?getCTById(ct.comboWith):null;
+      const ehk=_h(()=>openEditCT(ct.id));const dhk=_h(()=>deleteCT(ct.id));
+      return '<div class="ct-card"><div class="ct-icon" style="background:'+ct.color+'22">'+ct.icon+'</div>'
+        +'<div style="flex:1;min-width:0"><div class="ct-name">'+ct.name+'</div>'
+        +'<div class="ct-meta"><span>單堂 $'+ct.price+'</span><span>上限 '+ct.maxPeople+' 人</span>'
+        +(partner&&ct.comboPrice!=null?'<span>同日與「'+partner.name+'」優惠 $'+ct.comboPrice+'</span>':"")
+        +'<span style="width:9px;height:9px;border-radius:50%;background:'+ct.color+';display:inline-block;vertical-align:middle"></span></div></div>'
+        +'<div style="display:flex;gap:4px;flex-shrink:0">'
+        +'<button class="act" onclick="_H.'+ehk+'()">編輯</button>'
+        +(courseTypes.length>1?'<button class="act act-del" onclick="_H.'+dhk+'()">刪除</button>':"")
+        +'</div></div>';}).join("")
+    +'</div>';
+  // (continued in addCTbtn and rest)
+}
+function pageSettingsFull(){
+  const addhk=_h(openAddCT),savehk=_h(saveSettings),canchk=_h(()=>render());
+  return pageSettings()
+    +'<button class="btn-dash" onclick="_H.'+addhk+'()">＋ 新增課程類型</button></div></div>'
+    +'<div class="ss"><div class="s-hd"><span style="font-size:16px">📋</span><span class="s-hdt">課程規則</span></div>'
+    +'<div class="s-body"><div class="sfg"><label class="sfl">取消截止（開課前 N 小時）</label>'
+    +'<input class="sfi" id="sf-cancel" type="number" min="0" value="'+cfg.cancelHours+'"><span class="sfh">超過截止後鎖定，各課程可個別覆蓋</span></div>'
+    +'</div></div>'
+    +'<div class="ss"><div class="s-hd"><span style="font-size:16px">🏦</span><span class="s-hdt">付款資訊</span></div>'
+    +'<div class="s-body"><div class="sg2">'
+    +'<div class="sfg"><label class="sfl">銀行名稱</label><input class="sfi" id="sf-bname" type="text" value="'+cfg.bankName+'"></div>'
+    +'<div class="sfg"><label class="sfl">銀行代碼</label><input class="sfi" id="sf-bcode" type="text" value="'+cfg.bankCode+'"></div>'
+    +'<div class="sfg"><label class="sfl">匯款帳號</label><input class="sfi" id="sf-acc" type="text" value="'+cfg.account+'"></div>'
+    +'<div class="sfg"><label class="sfl">戶名</label><input class="sfi" id="sf-payee" type="text" value="'+cfg.payee+'"></div>'
+    +'</div><div class="sfg"><label class="sfl">付款說明</label>'
+    +'<textarea class="sfi" id="sf-note" rows="3" style="resize:vertical;line-height:1.7" oninput="const p=document.getElementById(\'pnp\');if(p)p.innerHTML=this.value.replace(/\\n/g,\'<br>\')">'+cfg.note+'</textarea></div>'
+    +'<div style="background:var(--bg);border-radius:8px;padding:11px 13px;border:.5px solid var(--mb2)">'
+    +'<div style="font-size:11px;color:var(--mb6);font-weight:500;margin-bottom:5px">預覽</div>'
+    +'<div style="font-size:12px;color:var(--mb7);line-height:1.8" id="pnp">'+cfg.note+'</div></div>'
+    +'</div></div>'
+    +'<div class="save-bar"><span class="save-st" id="save-st"></span>'
+    +'<button class="btn-sec" onclick="_H.'+canchk+'()">取消</button>'
+    +'<button class="btn-save" onclick="_H.'+savehk+'()">儲存設定</button></div>';
+}
+async function saveSettings(){
+  cfg.cancelHours=Number(document.getElementById("sf-cancel")?.value)||cfg.cancelHours;
+  cfg.bankName=document.getElementById("sf-bname")?.value||cfg.bankName;
+  cfg.bankCode=document.getElementById("sf-bcode")?.value||cfg.bankCode;
+  cfg.account=document.getElementById("sf-acc")?.value||cfg.account;
+  cfg.payee=document.getElementById("sf-payee")?.value||cfg.payee;
+  cfg.note=document.getElementById("sf-note")?.value||cfg.note;
+  await fbSet('config', 'main', cfg);
+  const st=document.getElementById("save-st");
+  if(st){st.textContent="✓ 已儲存";st.classList.add("show");setTimeout(()=>st.classList.remove("show"),2500);}
+  render();
+}
+
+// ═══ MODAL
+function closeModal(){document.getElementById("modal").innerHTML="";}
+function showModal(title,body,onOk,okLabel){
+  const xhk=_h(closeModal),canhk=_h(closeModal),okhk=_h(onOk);
+  document.getElementById("modal").innerHTML=
+    '<div class="modal-bg" id="mbg"><div class="modal-box">'
+    +'<div class="modal-hd"><span class="modal-hdt">'+title+'</span>'
+    +'<button class="modal-x" onclick="_H.'+xhk+'()">✕</button></div>'
+    +'<div class="modal-body">'+body+'</div>'
+    +'<div class="modal-ft"><button class="m-cancel" onclick="_H.'+canhk+'()">取消</button>'
+    +'<button class="m-ok" id="mok">'+(okLabel||"確認")+'</button></div></div></div>';
+  document.getElementById("mok").onclick=onOk;
+  document.getElementById("mbg").addEventListener("click",e=>{if(e.target.id==="mbg")closeModal();});
+}
+function showModalInfo(title,body){
+  const xhk=_h(()=>{closeModal();render();});
+  document.getElementById("modal").innerHTML=
+    '<div class="modal-bg" id="mbg"><div class="modal-box">'
+    +'<div class="modal-hd"><span class="modal-hdt">'+title+'</span>'
+    +'<button class="modal-x" onclick="_H.'+xhk+'()">✕</button></div>'
+    +'<div class="modal-body">'+body+'</div>'
+    +'<div class="modal-ft"><button class="m-ok" onclick="_H.'+xhk+'()">完成</button></div></div></div>';
+  document.getElementById("mbg").addEventListener("click",e=>{if(e.target.id==="mbg"){closeModal();render();}});
+}
+function tPickerHtml(selId,prefix){
+  return getTeachers().map(t=>{
+    const hk=_h(()=>{
+      if(prefix==="tp")_pickT=t.id; else _editT=t.id;
+      document.querySelectorAll('[id^="'+prefix+'-"]').forEach(el=>el.classList.toggle("sel",el.id===prefix+"-"+t.id));
+    });
+    return '<div class="t-opt'+(t.id===selId?" sel":"")+'" id="'+prefix+'-'+t.id+'" onclick="_H.'+hk+'()">'
+      +'<div class="t-av" style="background:'+t.color+'">'+t.name[0]+'</div>'
+      +'<div style="flex:1"><div class="t-name">'+t.name+'</div>'
+      +'<div class="t-rls">'+t.roles.map(r=>'<span class="t-rc trc-'+r[0]+'">'+RL[r]+'</span>').join("")+'</div></div>'
+      +'<div class="t-chk">✓</div></div>';
+  }).join("");
+}
+function cswHtml(selColor){
+  return CT_COLORS.map(c=>{
+    const hk=_h(()=>{_ctColor=c;document.querySelectorAll(".csw-item").forEach(el=>el.classList.toggle("sel",el.dataset.c===c));});
+    return '<div class="csw-item'+(c===selColor?" sel":"")+'" data-c="'+c+'" style="background:'+c+'" onclick="_H.'+hk+'()"></div>';
+  }).join("");
+}
+
+// ═══ ADD/EDIT COURSE
+function openAddCourse(){
+  const p=monthView.split("-");const minD=p[0]+"-"+p[1]+"-01";
+  const maxD=p[0]+"-"+p[1]+"-"+String(new Date(+p[0],+p[1],0).getDate()).padStart(2,"0");
+  _pickT=getTeachers()[0]?.id||"";
+  const typeOpts=courseTypes.map(ct=>'<option value="'+ct.name+'">'+ct.icon+' '+ct.name+'</option>').join("");
+  const defMax=courseTypes[0]?courseTypes[0].maxPeople:8;
+  const body='<div class="mg2">'
+    +'<div class="mf"><label class="ml">課程類型</label><select class="ms" id="nc-type" onchange="updateCPrev()">'+typeOpts+'</select></div>'
+    +'<div class="mf"><label class="ml">日期（限 '+monthView+'）</label><input class="mi" id="nc-date" type="date" min="'+minD+'" max="'+maxD+'" value="'+minD+'" oninput="updateCPrev()"></div>'
+    +'<div class="mf"><label class="ml">開始時間</label><input class="mi" id="nc-time" type="time" value="19:00" oninput="updateCPrev()"></div>'
+    +'<div class="mf"><label class="ml">時長（分鐘）</label><input class="mi" id="nc-dur" type="number" value="60" min="15"></div>'
+    +'<div class="mf"><label class="ml">人數上限</label><input class="mi" id="nc-max" type="number" value="'+defMax+'" min="1" max="50" oninput="updateCPrev()"><span class="mhint">預設取自課程類型</span></div>'
+    +'<div class="mf"><label class="ml">取消截止（開課前 N 小時）</label><input class="mi" id="nc-cancel" type="number" value="'+cfg.cancelHours+'" min="0" oninput="updateCPrev()"></div>'
+    +'</div><div class="mf"><label class="ml">負責老師</label>'
+    +'<div style="display:flex;flex-direction:column;gap:6px">'+(tPickerHtml(_pickT,"tp")||'<div class="info-box">尚未設定老師帳號</div>')+'</div></div>'
+    +'<div class="cprev" id="cprev"><div class="cprev-t">課程預覽</div>'
+    +'<div class="cprev-r"><span class="cprev-k">類型</span><span class="cprev-v">'+(courseTypes[0]?courseTypes[0].icon+" "+courseTypes[0].name:"")+'</span></div>'
+    +'<div class="cprev-r"><span class="cprev-k">日期</span><span class="cprev-v">'+fmtDate(minD)+'</span></div>'
+    +'<div class="cprev-r"><span class="cprev-k">上限/截止</span><span class="cprev-v">'+defMax+' 人 / 前 '+cfg.cancelHours+'h</span></div></div>';
+  showModal("新增課程",body,confirmAddCourse,"新增");
+}
+function updateCPrev(){
+  const type=document.getElementById("nc-type")?.value||"";
+  const ct=getCTByName(type);
+  const maxEl=document.getElementById("nc-max");
+  if(maxEl&&ct&&document.activeElement!==maxEl)maxEl.value=ct.maxPeople;
+  const maxP=maxEl?maxEl.value:(ct?ct.maxPeople:8);
+  const cancelH=document.getElementById("nc-cancel")?.value||cfg.cancelHours;
+  const date=document.getElementById("nc-date")?.value||"";
+  const time=document.getElementById("nc-time")?.value||"";
+  const tname=users.find(u=>u.id===_pickT)?.name||"—";
+  const pv=document.getElementById("cprev");
+  if(pv)pv.innerHTML='<div class="cprev-t">課程預覽</div>'
+    +'<div class="cprev-r"><span class="cprev-k">類型</span><span class="cprev-v">'+(ct?ct.icon+" ":"")+type+'</span></div>'
+    +'<div class="cprev-r"><span class="cprev-k">日期</span><span class="cprev-v">'+(date?fmtDate(date):"—")+'</span></div>'
+    +'<div class="cprev-r"><span class="cprev-k">時間</span><span class="cprev-v">'+(time||"—")+'</span></div>'
+    +'<div class="cprev-r"><span class="cprev-k">老師</span><span class="cprev-v">'+tname+'</span></div>'
+    +'<div class="cprev-r"><span class="cprev-k">上限/截止</span><span class="cprev-v">'+maxP+' 人 / 前 '+cancelH+'h</span></div>';
+}
+async function confirmAddCourse(){
+  const date=document.getElementById("nc-date")?.value;
+  const time=document.getElementById("nc-time")?.value;
+  const type=document.getElementById("nc-type")?.value||(courseTypes[0]?courseTypes[0].name:"");
+  const maxP=Number(document.getElementById("nc-max")?.value)||8;
+  const cancelH=Number(document.getElementById("nc-cancel")?.value);
+  const tid=_pickT||(getTeachers()[0]?getTeachers()[0].id:"");
+  if(!date||!time){alert("請填寫日期和時間");return;}
+  const ps=monthView.split("-").map(Number),ds=date.split("-").map(Number);
+  if(ds[0]!==ps[0]||ds[1]!==ps[1]){alert("請輸入 "+monthView+" 的日期");return;}
+  const newS={id:"m"+(sidN++),date,time,type,teacherId:tid,max:maxP,min:MIN,cancelHours:isNaN(cancelH)?null:cancelH,status:"open",src:"manual"};
+  schedules.push(newS);
+  await fbSet('schedules', newS.id, newS);
+  // Notify all students with LINE
+  const studs=users.filter(u=>u.roles.includes("student")&&u.lineUserId);
+  for(const u of studs){
+    await lineNotify(u.lineUserId, `📅 新增課程通知\n${type} 新增了一堂課！\n日期：${fmtDate(date)} ${time}\n老師：${getTname(tid)}\n快去預約吧！`);
+  }
+  closeModal();render();
+}
+async function confirmEditCourse(){
+  const s=schedules.find(x=>x.id===_editSid);if(!s)return;
+  s.type=document.getElementById("ec-type")?.value||s.type;
+  s.time=document.getElementById("ec-time")?.value||s.time;
+  s.max=Number(document.getElementById("ec-max")?.value)||s.max;
+  const ch=Number(document.getElementById("ec-cancel")?.value);
+  s.cancelHours=isNaN(ch)?null:ch;
+  s.teacherId=_editT||s.teacherId;
+  await fbSet('schedules', s.id, s);
+  closeModal();render();
+}
+function openEditCourse(sid){
+  const s=schedules.find(x=>x.id===sid);if(!s)return;
+  _editSid=sid;_editT=s.teacherId||"";
+  const typeOpts=courseTypes.map(ct=>'<option value="'+ct.name+'"'+(s.type===ct.name?" selected":"")+'>'+ct.icon+' '+ct.name+'</option>').join("");
+  const ch=s.cancelHours!=null?s.cancelHours:cfg.cancelHours;
+  const body='<div class="mg2">'
+    +'<div class="mf"><label class="ml">課程類型</label><select class="ms" id="ec-type">'+typeOpts+'</select></div>'
+    +'<div class="mf"><label class="ml">開始時間</label><input class="mi" id="ec-time" type="time" value="'+s.time+'"></div>'
+    +'<div class="mf"><label class="ml">人數上限</label><input class="mi" id="ec-max" type="number" min="1" max="50" value="'+s.max+'"><span class="mhint">系統預設取自課程類型</span></div>'
+    +'<div class="mf"><label class="ml">取消截止（開課前 N 小時）</label><input class="mi" id="ec-cancel" type="number" min="0" value="'+ch+'"><span class="mhint">系統預設：'+cfg.cancelHours+' 小時</span></div>'
+    +'</div><div class="mf"><label class="ml">負責老師</label>'
+    +'<div style="display:flex;flex-direction:column;gap:6px">'+(tPickerHtml(_editT,"et")||'<div class="info-box">尚未設定老師帳號</div>')+'</div></div>'
+    +'<div style="background:var(--bg);border-radius:8px;padding:9px 12px;border:.5px solid var(--brd);font-size:12px;color:var(--t3)">日期：'+fmtDate(s.date)+'（不可修改）</div>';
+  showModal("編輯課程 — "+fmtDate(s.date),body,confirmEditCourse,"儲存");
+}
+function confirmEditCourse(){
+  const s=schedules.find(x=>x.id===_editSid);if(!s)return;
+  s.type=document.getElementById("ec-type")?.value||s.type;
+  s.time=document.getElementById("ec-time")?.value||s.time;
+  s.max=Number(document.getElementById("ec-max")?.value)||s.max;
+  const ch=Number(document.getElementById("ec-cancel")?.value);
+  s.cancelHours=isNaN(ch)?null:ch;
+  s.teacherId=_editT||s.teacherId;
+  closeModal();render();
+}
+
+// ═══ ADD STUDENT
+function openAddStudent(sid){
+  _addSearch="";
+  const allAvail=getStudents().filter(u=>!uBooked(sid,u.id)&&!uWait(sid,u.id));
+  if(!allAvail.length){showModalInfo("加入學員",'<div class="info-box">所有學員已在名單中</div>');return;}
+  window._currentSid=sid;
+  const body='<div class="mf"><label class="ml">搜尋學員</label>'
+    +'<div class="srch-wrap"><input id="add-srch" type="text" placeholder="輸入姓名…" oninput="_addSearch=this.value;document.getElementById(\"add-list\").innerHTML=buildAddList(getStudents().filter(u=>!uBooked(_currentSid,u.id)&&!uWait(_currentSid,u.id)),_currentSid)"><span class="srch-ico">🔍</span></div></div>'
+    +'<div class="mf"><label class="ml">選擇學員</label><div id="add-list">'+buildAddList(allAvail,sid)+'</div></div>';
+  showModal("加入學員",body,()=>{
+    const sel=document.getElementById("add-sel");if(!sel||!sel.value){alert("請選擇學員");return;}
+    const sc=schedules.find(x=>x.id===sid);
+    bookings.push({id:"b"+(bidN++),sid,uid:sel.value,status:bkdCnt(sid)>=(sc?sc.max:8)?"waitlist":"booked"});
+    closeModal();render();
+  },"加入");
+}
+function buildAddList(avail,sid){
+  const sq=_addSearch.trim().toLowerCase();
+  const fl=sq?avail.filter(u=>u.name.toLowerCase().includes(sq)):avail;
+  if(!fl.length)return '<div style="padding:10px;font-size:12px;color:var(--t3)">找不到符合的學員</div>';
+  return '<select class="ms" id="add-sel" size="'+Math.min(fl.length+1,6)+'" style="border-radius:8px">'+fl.map(u=>'<option value="'+u.id+'">'+u.name+'（'+u.roles.map(r=>RL[r]).join("・")+'）</option>').join("")+'</select>';
+}
+function refreshAddList(sid){
+  const el=document.getElementById("add-list");if(!el)return;
+  const allAvail=getStudents().filter(u=>!uBooked(sid,u.id)&&!uWait(sid,u.id));
+  el.innerHTML=buildAddList(allAvail,sid);
+}
+
+// ═══ CONFIRM PAYMENT
+function openConfirmPayment(uid,mv){
+  const u=users.find(x=>x.id===uid);if(!u)return;
+  const{total}=computeBilling(uid,mv);const pdata=getPayment(uid,mv);
+  const paidAmt=pdata?pdata.paidAmount:total;const diff=total-paidAmt;
+  const body='<div style="display:flex;align-items:center;gap:12px;padding:13px;background:var(--bg);border-radius:10px;border:.5px solid var(--brd)">'
+    +'<div style="width:38px;height:38px;border-radius:50%;background:'+u.color+';display:flex;align-items:center;justify-content:center;font-size:16px;color:#fff;font-weight:500;flex-shrink:0">'+u.name[0]+'</div>'
+    +'<div><div style="font-size:14px;font-weight:500">'+u.name+'</div><div style="font-size:12px;color:var(--t3);margin-top:2px">本月應繳：$'+total.toLocaleString()+'</div></div></div>'
+    +(pdata?'<div class="info-box">學員申報金額：<strong>$'+paidAmt.toLocaleString()+'</strong>'+(diff!==0?'<div style="margin-top:4px;color:'+(diff>0?"#c44":"#3a7a3a")+'">'+(diff>0?"⚠ 金額不足 $"+diff:"✓ 多繳 $"+Math.abs(diff))+'</div>':"")+'</div>':"")
+    +'<div style="background:var(--bg);border-radius:8px;padding:11px 13px;border:.5px solid var(--brd)">'
+    +'<div style="font-size:11px;color:var(--t3);font-weight:500;margin-bottom:8px">確認後通知方式</div>'
+    +'<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:8px"><input type="checkbox" id="nl" checked style="accent-color:var(--mb5);width:15px;height:15px"> LINE 通知（模擬）</label>'
+    +'<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="ne" style="accent-color:var(--mb5);width:15px;height:15px"> Email 通知（模擬）</label></div>';
+  showModal("確認收款 — "+u.name,body,()=>doConfirmPayment(uid,mv),"確認收款並通知");
+}
+async function doConfirmPayment(uid,mv){
+  const nl=document.getElementById("nl")?.checked;
+  await confirmPayment(uid,mv);closeModal();
+  const u=users.find(x=>x.id===uid);const{total}=computeBilling(uid,mv);
+  if(nl&&u&&u.lineUserId){
+    await lineNotify(u.lineUserId, `✅ 付款確認\n${u.name} 您好！\n${mv} 月費用 $${total.toLocaleString()} 已確認收款，謝謝！`);
+    showModalInfo("✅ 已確認收款",'<div class="banner green"><div class="bicon">💬</div><div><div class="btitle">LINE 通知已發送</div><div class="bsub">已通知 '+(u?u.name:"")+' $'+total.toLocaleString()+' 確認收款。</div></div></div>');
+  } else { render(); }
+}
+
+// ═══ EDIT ROLE
+async function openEditRole(uid){
+  const u=users.find(x=>x.id===uid);if(!u)return;
+  const body='<div style="display:flex;align-items:center;gap:10px;padding:11px 12px;background:var(--bg);border-radius:8px;border:.5px solid var(--brd)">'
+    +'<div style="width:32px;height:32px;border-radius:50%;background:'+u.color+';display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff;font-weight:500">'+u.name[0]+'</div>'
+    +'<div><div style="font-size:13px;font-weight:500">'+u.name+'</div><div style="font-size:11px;color:var(--t3)">LINE: '+(u.lineUserId?'已連結':'未連結')+'</div></div></div>'
+    +'<div class="mf"><label class="ml">角色（可複選）</label>'
+    +'<div class="rcbg">'+ALL_ROLES.map(r=>'<label class="rcb"><input type="checkbox" id="rc-'+r+'" '+(u.roles.includes(r)?"checked":"")+'>'+RL[r]+'</label>').join("")+'</div>'
+    +'<span class="mhint">一個帳號可同時擁有多種角色</span></div>';
+  showModal("編輯角色 — "+u.name,body,async ()=>{
+    const newRoles=ALL_ROLES.filter(r=>document.getElementById("rc-"+r)?.checked);
+    if(!newRoles.length){alert("至少選一個角色");return;}
+    const i=users.findIndex(x=>x.id===uid);
+    if(i>-1){ users[i].roles=newRoles; await fbUpdate('users', uid, {roles:newRoles}); }
+    closeModal();render();
+  },"儲存");
+}
+
+// ═══ CT MODALS
+function ctBody(ct){
+  const id=ct?ct.id:"";_ctColor=ct?ct.color:CT_COLORS[0];
+  const comboOpts='<option value="">無</option>'+courseTypes.filter(x=>x.id!==id).map(x=>'<option value="'+x.id+'"'+(ct&&ct.comboWith===x.id?" selected":"")+'>'+x.name+'</option>').join("");
+  return '<div class="mg2">'
+    +'<div class="mf"><label class="ml">課程名稱</label><input class="mi" id="ct-name" type="text" value="'+(ct?ct.name:"")+'" placeholder="例：空中絲帶"></div>'
+    +'<div class="mf"><label class="ml">圖示 Emoji</label><input class="mi" id="ct-icon" type="text" value="'+(ct?ct.icon:"🎪")+'" maxlength="2" style="font-size:20px;text-align:center"></div>'
+    +'<div class="mf"><label class="ml">單堂售價（$）</label><input class="mi" id="ct-price" type="number" min="0" value="'+(ct?ct.price:450)+'"></div>'
+    +'<div class="mf"><label class="ml">人數上限（人）</label><input class="mi" id="ct-maxp" type="number" min="1" max="50" value="'+(ct?ct.maxPeople:8)+'"><span class="mhint">此類型的預設上限</span></div>'
+    +'<div class="mf"><label class="ml">同日優惠對象</label><select class="ms" id="ct-cwith">'+comboOpts+'</select></div>'
+    +'<div class="mf"><label class="ml">同日優惠價（留空=不設）</label><input class="mi" id="ct-cprice" type="number" min="0" value="'+(ct&&ct.comboPrice!=null?ct.comboPrice:"")+'" placeholder="例：400"></div>'
+    +'</div><div class="mf"><label class="ml">顏色</label><div class="csw">'+cswHtml(_ctColor)+'</div></div>';
+}
+function openAddCT(){
+  _ctColor=CT_COLORS[0];
+  showModal("新增課程類型",ctBody(null),()=>{
+    const name=document.getElementById("ct-name")?.value.trim();
+    if(!name){alert("請輸入課程名稱");return;}
+    if(courseTypes.some(t=>t.name===name)){alert("已有同名課程類型");return;}
+    const price=Number(document.getElementById("ct-price")?.value)||450;
+    const maxPeople=Number(document.getElementById("ct-maxp")?.value)||8;
+    const cpStr=document.getElementById("ct-cprice")?.value.trim();
+    const comboPrice=cpStr===""?null:Number(cpStr);
+    const comboWith=document.getElementById("ct-cwith")?.value||null;
+    const icon=document.getElementById("ct-icon")?.value||"📌";
+    courseTypes.push({id:"ct"+(_ctId++),name,price,maxPeople,comboPrice,comboWith:comboWith||null,color:_ctColor,icon});
+    closeModal();render();
+  },"新增");
+}
+function openEditCT(id){
+  const ct=getCTById(id);if(!ct)return;_editCtId=id;
+  showModal("編輯 — "+ct.name,ctBody(ct),()=>{
+    const ct2=getCTById(_editCtId);if(!ct2)return;
+    const name=document.getElementById("ct-name")?.value.trim();if(!name){alert("請輸入課程名稱");return;}
+    const oldName=ct2.name;ct2.name=name;
+    ct2.price=Number(document.getElementById("ct-price")?.value)||450;
+    ct2.maxPeople=Number(document.getElementById("ct-maxp")?.value)||ct2.maxPeople||8;
+    const cpStr=document.getElementById("ct-cprice")?.value.trim();
+    ct2.comboPrice=cpStr===""?null:Number(cpStr);
+    ct2.comboWith=document.getElementById("ct-cwith")?.value||null;
+    ct2.icon=document.getElementById("ct-icon")?.value||ct2.icon;
+    ct2.color=_ctColor||ct2.color;
+    if(name!==oldName)schedules.forEach(s=>{if(s.type===oldName)s.type=name;});
+    closeModal();render();
+  },"儲存");
+}
+async function deleteCT(id){
+  if(courseTypes.length<=1){alert("至少保留一種課程類型");return;}
+  const ct=getCTById(id);if(!ct)return;
+  if(!confirm("確定刪除「"+ct.name+"」？"))return;
+  courseTypes=courseTypes.filter(t=>t.id!==id);
+  courseTypes.forEach(t=>{if(t.comboWith===id)t.comboWith=null;});
+  render();
+}
+
+// ═══ LOGIN
+function renderLogin(){
+  const lhk=_h(doLineLogin);
+  return '<div class="login-wrap"><div class="login-card">'
+    +'<div class="login-icon"><svg width="24" height="24" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 5.37 2 9.5c0 3.68 3.18 6.73 7.5 7.38V19l3-2c.17 0 .33.01.5.01 5.52 0 10-3.37 10-7.51C23 5.37 18.52 2 12 2z" fill="#5c7f97"/></svg></div>'
+    +'<div class="login-title">貝你飛・空中律動</div>'
+    +'<div class="login-sub">課程預約系統<br>使用 LINE 帳號登入，即可預約課程</div>'
+    +'<button class="line-btn" onclick="_H.'+lhk+'()">使用 LINE 登入</button>'
+    +'</div></div>';
+}
+function loginAs(uid){
+  currentUserId=uid;const u=users.find(x=>x.id===uid);if(!u)return;
+  // Priority: student first (so multi-role users land on student), then teacher, then admin
+  if(u.roles.includes("student"))activeRole="student";
+  else if(u.roles.includes("teacher"))activeRole="teacher";
+  else activeRole="admin";
+  V(activeRole);
+}
+function switchRole(role){activeRole=role;V(role);}
+
+// ═══ MAIN RENDER
+function V(view){
+  currentView=view;
+  document.querySelectorAll(".vbtn").forEach(b=>b.classList.remove("on"));
+  const btn=document.getElementById("vbtn-"+view);if(btn)btn.classList.add("on");
+  render();
+}
+// Register desktop nav buttons
+_H.vlogin=()=>V("login");
+_H.vstudent=()=>V("student");
+_H.vteacher=()=>V("teacher");
+_H.vadmin=()=>V("admin");
+
+function render(){
+  const ta=document.getElementById("topbar-area");
+  const ca=document.getElementById("content-area");
+  if(!ta||!ca)return;
+  if(currentView==="login"){ta.innerHTML="";ca.innerHTML=renderLogin();return;}
+  const cu=users.find(u=>u.id===currentUserId);
+  const tabMap={
+    student:[["cal","月曆課表"],["mine","我的預約"],["billing","費用 & 付款"]],
+    teacher:[],
+    admin:[["courses","課程管理"],["stats","統計 & 收費"],["settings","系統設定"]]
+  };
+  const tabs=tabMap[currentView]||[];
+  if(!activeTab[currentView]&&tabs.length)activeTab[currentView]=tabs[0][0];
+  const roleBadges=cu?cu.roles.map(r=>'<span class="tb-rc">'+RL[r]+'</span>').join(""):"";
+  const swhk=_h(()=>V("login"));
+  let topHtml='<div class="topbar"><div><div class="tb-brand">空中律動・預約系統</div><div class="tb-name">'+(cu?cu.name:"")+'</div><div class="tb-roles">'+roleBadges+'</div></div>'
+    +'<button class="sw" onclick="_H.'+swhk+'()">切換身份</button></div>';
+  if(cu&&cu.roles.length>1){
+    topHtml+='<div class="rsbar">';
+    cu.roles.forEach(r=>{const rhk=_h(()=>switchRole(r));topHtml+='<button class="rsbtn'+(r===activeRole?" on":"")+'" onclick="_H.'+rhk+'()">'+RL[r]+'模式</button>';});
+    topHtml+='</div>';
+  }
+  if(tabs.length){
+    topHtml+='<div class="tabbar">'+tabs.map(([id,lbl])=>{
+      const tk=_h(()=>{activeTab[currentView]=id;render();});
+      return '<span class="tab'+(activeTab[currentView]===id?" on":"")+'" onclick="_H.'+tk+'()">'+lbl+'</span>';
+    }).join("")+'</div>';
+  }
+  ta.innerHTML=topHtml;
+  let body="";
+  if(currentView==="student"){
+    const uid=currentUserId||"u1";const t=activeTab.student;
+    body=t==="cal"?pageCalendar(uid):t==="mine"?pageMyBookings(uid):pageBilling(uid);
+  }else if(currentView==="teacher"){body=pageTeacher();}
+  else{const t=activeTab.admin;body=t==="courses"?pageAdminCourses():t==="stats"?pageAdminStats():pageSettingsFull();}
+  ca.innerHTML='<div class="content">'+body+'</div>';
+  if(currentView==="admin"&&activeTab.admin==="settings"){
+    const ne=document.getElementById("sf-note"),pe=document.getElementById("pnp");
+    if(ne&&pe)ne.addEventListener("input",()=>{pe.innerHTML=ne.value.replace(/\n/g,"<br>");});
+  }
+}
+
+// ═══ WINDOW EXPORTS (must be after all function definitions)
+window._setStatsSearch = (v)=>{ _statsSearch=v; updateStatsTable(); };
+window._setAddSearch = (v,sid)=>{ _addSearch=v; refreshAddList(sid); };
+window.toggleExp = (id)=>toggleExp(id);
+window.setSelDate = (d)=>setSelDate(d);
+window.setTeacherSelDate = (d)=>setTeacherSelDate(d);
+window.setAdminSelDate = (d)=>setAdminSelDate(d);
+window.calPrev = ()=>calPrev();
+window.calNext = ()=>calNext();
+window.tcalPrev = ()=>tcalPrev();
+window.tcalNext = ()=>tcalNext();
+window.acalPrev = ()=>acalPrev();
+window.acalNext = ()=>acalNext();
+window.mvPrev = ()=>mvPrev();
+window.mvNext = ()=>mvNext();
+window.updateCPrev = ()=>updateCPrev();
+window.updateStatsTable = ()=>updateStatsTable();
+window.refreshAddList = (sid)=>refreshAddList(sid);
+window.copyAccount = ()=>copyAccount();
+window.doLineLogin = doLineLogin;
+
+// ═══ STARTUP
+async function init(){
+  try {
+    // Check if returning from LINE Login callback
+    if(window.location.search.includes('code=')){
+      const handled = await handleLineCallback();
+      if(handled) return;
+    }
+    // Load data then show login
+    await loadFromFirebase();
+    render();
+  } catch(e) {
+    console.error('Init error:', e);
+    const ca = document.getElementById('content-area');
+    if(ca) ca.innerHTML = '<div style="padding:30px;font-family:sans-serif;color:#c44;max-width:500px;margin:0 auto">'
+      + '<h3>系統啟動失敗</h3><p style="margin-top:10px;font-size:13px;color:#666">錯誤：'+e.message+'</p>'
+      + '<p style="margin-top:8px;font-size:12px;color:#999">請重新整理頁面，或聯絡管理員</p></div>';
+    hideLoading();
+  }
+}
+init();
+</script>
+</body>
+</html>

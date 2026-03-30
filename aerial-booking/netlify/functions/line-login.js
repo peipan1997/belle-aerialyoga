@@ -1,6 +1,6 @@
 const https = require('https');
 
-const LINE_LOGIN_CHANNEL_ID = '2009641467';
+const LINE_LOGIN_CHANNEL_ID = '2009641385';
 const LINE_LOGIN_CHANNEL_SECRET = 'f6bd063306c1e8d3846c1b001eef22c8';
 const REDIRECT_URI = 'https://voluble-granita-401749.netlify.app/line-callback.html';
 

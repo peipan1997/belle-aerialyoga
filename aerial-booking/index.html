@@ -360,7 +360,7 @@ function _h(fn){ const k='h'+(++_hN); _H[k]=fn; return k; }
 let _hN=0;
 
 // ═══ DATA
-const NOW = new Date("2026-05-10T18:00:00");
+const NOW = new Date();
 const ALL_ROLES = ["student","teacher","admin"];
 const RL = {student:"學生",teacher:"老師",admin:"管理員"};
 const CT_COLORS = ["#7a9db5","#8fa89a","#b9a880","#c4856a","#9a7abf","#5c7f97","#bf7a9a","#7abf9a"];
@@ -406,20 +406,13 @@ function buildMonth(y,m){
   }
   return r.sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
 }
-let schedules=[...buildMonth(2026,5),
-  {id:"m1",date:"2026-05-18",time:"14:00",type:"空中環",teacherId:"t2",max:8,min:MIN,cancelHours:null,status:"open",src:"manual"}];
-let bookings=[
-  {id:"b1",sid:"s-2026-5-6-空中瑜珈-19:00",uid:"u1",status:"booked"},
-  {id:"b2",sid:"s-2026-5-6-空中環-20:15",  uid:"u1",status:"booked"},
-  {id:"b3",sid:"s-2026-5-6-空中瑜珈-19:00",uid:"u2",status:"booked"},
-  {id:"b4",sid:"s-2026-5-13-空中瑜珈-19:00",uid:"u1",status:"booked"},
-  {id:"b5",sid:"s-2026-5-13-空中瑜珈-19:00",uid:"u2",status:"booked"},
-];
+let schedules=[];
+let bookings=[];
 let payments=[],refundRequests=[];
 let bidN=10,sidN=100,rfN=1;
-let monthView="2026-05",selDate="2026-05-10";
-let calY=2026,calM=5,acalY=2026,acalM=5,tcalY=2026,tcalM=5;
-let adminSelDate="2026-05-10",teacherSelDate="2026-05-10";
+const _today=new Date();const _todayStr=_today.getFullYear()+"-"+String(_today.getMonth()+1).padStart(2,"0")+"-"+String(_today.getDate()).padStart(2,"0");const _monthStr=_today.getFullYear()+"-"+String(_today.getMonth()+1).padStart(2,"0");let monthView=_monthStr,selDate=_todayStr;
+let calY=_today.getFullYear(),calM=_today.getMonth()+1,acalY=_today.getFullYear(),acalM=_today.getMonth()+1,tcalY=_today.getFullYear(),tcalM=_today.getMonth()+1;
+let adminSelDate=_todayStr,teacherSelDate=_todayStr;
 let activeTab={student:"cal",admin:"courses"};
 let currentView="login",currentUserId=null,activeRole=null;
 let expandedRows={};
@@ -722,7 +715,7 @@ function renderExpRow(s,rowKey,adminBtns){
   const studs=bookings.filter(b=>b.sid===s.id&&b.status==="booked").map(b=>users.find(u=>u.id===b.uid)).filter(Boolean);
   const waits=bookings.filter(b=>b.sid===s.id&&b.status==="waitlist").map(b=>users.find(u=>u.id===b.uid)).filter(Boolean);
   const stBadge=s.status==="stopped"?'<span class="sp sp-stop">已停課</span>':cnt>=s.min?'<span class="sp sp-booked">開班中</span>':'<span class="sp sp-wait">待開班</span>';
-  const chips=studs.length===0?'<span style="font-size:12px;color:var(--t3)">尚無學員</span>':studs.map(u=>'<span class="chip"><span class="chip-av" style="background:'+u.color+'">'+u.name[0]+'</span>'+u.name+'</span>').join("");
+  const chips=studs.length===0?'<span style="font-size:12px;color:var(--t3)">尚無學員</span>':studs.map(u=>{const rmhk=_h(()=>adminRemoveStudent(s.id,u.id));return '<span class="chip"><span class="chip-av" style="background:'+u.color+'">'+u.name[0]+'</span>'+u.name+'<span onclick="_H.'+rmhk+'()" style="margin-left:4px;cursor:pointer;color:#c44;font-weight:bold">✕</span></span>';}).join("");
   const wlSec=waits.length>0?'<div class="wl-sec"><div class="wl-lbl">候補名單</div><div class="chips">'+waits.map(u=>'<span class="chip" style="border-color:var(--sage);background:var(--sl)"><span class="chip-av" style="background:'+u.color+'">'+u.name[0]+'</span>'+u.name+'</span>').join("")+'</div></div>':"";
   let abtns="";
   if(adminBtns){
@@ -926,7 +919,7 @@ function pageAdminCourses(){
           +'</div>'
           +'<div class="exp-body'+(isOpen?" open":"")+'" id="expb-'+rk+'" style="display:'+(isOpen?"block":"none")+'">'
           +'<div style="font-size:10px;color:var(--t3);margin-bottom:5px">已報名學員</div>'
-          +'<div class="chips" style="margin-bottom:8px">'+(studs.length===0?'<span style="font-size:12px;color:var(--t3)">尚無學員</span>':studs.map(u=>'<span class="chip"><span class="chip-av" style="background:'+u.color+'">'+u.name[0]+'</span>'+u.name+'</span>').join(""))+'</div>'
+          +'<div class="chips" style="margin-bottom:8px">'+(studs.length===0?'<span style="font-size:12px;color:var(--t3)">尚無學員</span>':studs.map(u=>{const rmhk=_h(()=>adminRemoveStudent(s.id,u.id));return '<span class="chip"><span class="chip-av" style="background:'+u.color+'">'+u.name[0]+'</span>'+u.name+'<span onclick="_H.'+rmhk+'()" style="margin-left:4px;cursor:pointer;color:#c44;font-weight:bold">✕</span></span>';}).join(""))+'</div>'
           +(waits.length>0?'<div style="font-size:10px;color:var(--t3);margin-bottom:4px">候補</div><div class="chips" style="margin-bottom:8px">'+waits.map(u=>'<span class="chip" style="border-color:var(--sage);background:var(--sl)"><span class="chip-av" style="background:'+u.color+'">'+u.name[0]+'</span>'+u.name+'</span>').join("")+'</div>':"")
           +'<div style="display:flex;gap:5px;flex-wrap:wrap;padding-top:6px;border-top:.5px solid var(--brd)">'
           +'<button class="act" onclick="_H.'+ehk+'()">⚙ 編輯</button>'
@@ -1169,8 +1162,6 @@ function confirmAddCourse(){
   const cancelH=Number(document.getElementById("nc-cancel")?.value);
   const tid=_pickT||(getTeachers()[0]?getTeachers()[0].id:"");
   if(!date||!time){alert("請填寫日期和時間");return;}
-  const ps=monthView.split("-").map(Number),ds=date.split("-").map(Number);
-  if(ds[0]!==ps[0]||ds[1]!==ps[1]){alert("請輸入 "+monthView+" 的日期");return;}
   schedules.push({id:"m"+(sidN++),date,time,type,teacherId:tid,max:maxP,min:MIN,cancelHours:isNaN(cancelH)?null:cancelH,status:"open",src:"manual"});
   closeModal();render();
 }
@@ -1201,6 +1192,17 @@ function confirmEditCourse(){
 }
 
 // ═══ ADD STUDENT
+
+async function adminRemoveStudent(sid,uid){
+  if(!confirm("確定將此學員從課程移除？"))return;
+  const i=bookings.findIndex(b=>b.sid===sid&&b.uid===uid&&b.status==="booked");
+  if(i>-1){
+    const bid=bookings[i].id;
+    bookings.splice(i,1);
+    try{await fbDelete('bookings',bid);}catch(e){console.error('fbDelete',e);}
+  }
+  render();
+}
 function openAddStudent(sid){
   _addSearch="";
   const allAvail=getStudents().filter(u=>!uBooked(sid,u.id)&&!uWait(sid,u.id));

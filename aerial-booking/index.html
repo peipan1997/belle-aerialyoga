@@ -5,8 +5,6 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <title>空中律動・預約系統</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500&display=swap" rel="stylesheet">
-<script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore-compat.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -244,216 +242,152 @@ body{font-family:"Noto Sans TC",sans-serif;background:var(--bg);color:var(--t1);
 .empty{text-align:center;padding:24px;color:var(--t3);font-size:13px}
 .divider{height:.5px;background:var(--brd)}
 </style>
+<script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
 <div class="wrap">
-  
+  <div class="dbar" id="dbar">
+    <button class="vbtn on" id="vbtn-login" onclick="_H.vlogin()">登入頁</button>
+    <button class="vbtn" id="vbtn-student" onclick="_H.vstudent()">📱 學生</button>
+    <button class="vbtn" id="vbtn-teacher" onclick="_H.vteacher()">老師</button>
+    <button class="vbtn" id="vbtn-admin" onclick="_H.vadmin()">後台管理</button>
+    <span class="dbanner">測試版・資料不會儲存</span>
+  </div>
   <div class="app">
     <div id="topbar-area"></div>
     <div id="content-area"></div>
   </div>
   <div id="modal"></div>
-  <div id="loading-overlay" style="display:none;position:fixed;inset:0;background:rgba(33,48,64,.85);z-index:9999;flex-direction:column;align-items:center;justify-content:center;gap:16px">
-    <div style="width:40px;height:40px;border:3px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;animation:spin 0.8s linear infinite"></div>
-    <div class="ld-msg" style="color:#fff;font-size:14px;font-family:'Noto Sans TC',sans-serif">載入中...</div>
-  </div>
-  <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
 </div>
 <script>
 
-// ═══ FIREBASE CONFIG
-const firebaseConfig = {
-  apiKey: "AIzaSyDCwLnMomaqkXaExkfaJzGIeSLhjbK8DWE",
-  authDomain: "belle-aerialyoga-booking.firebaseapp.com",
-  projectId: "belle-aerialyoga-booking",
-  storageBucket: "belle-aerialyoga-booking.firebasestorage.app",
-  messagingSenderId: "724043029118",
-  appId: "1:724043029118:web:dfcbe88a53f05de14b962f",
-  measurementId: "G-BRQF327GNG"
-};
-const app = firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
+// ═══ FIREBASE
+const _fbApp = firebase.initializeApp({
+  apiKey:"AIzaSyDCwLnMomaqkXaExkfaJzGIeSLhjbK8DWE",
+  authDomain:"belle-aerialyoga-booking.firebaseapp.com",
+  projectId:"belle-aerialyoga-booking",
+  storageBucket:"belle-aerialyoga-booking.firebasestorage.app",
+  messagingSenderId:"724043029118",
+  appId:"1:724043029118:web:dfcbe88a53f05de14b962f"
+});
+const _db = firebase.firestore();
+async function fbSet(col,id,data){await _db.collection(col).doc(id).set(data);}
+async function fbUpdate(col,id,data){await _db.collection(col).doc(id).update(data);}
+async function fbDelete(col,id){await _db.collection(col).doc(id).delete();}
+async function fbGetAll(col){const s=await _db.collection(col).get();return s.docs.map(d=>({...d.data(),_fid:d.id}));}
+async function lineNotify(uid,msg){
+  if(!uid)return;
+  try{await fetch('/.netlify/functions/line-notify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to:uid,message:msg})});}
+  catch(e){console.error('lineNotify',e);}
+}
+function showLoading(msg){
+  let el=document.getElementById('_ld');
+  if(!el){el=document.createElement('div');el.id='_ld';
+    el.style.cssText='position:fixed;inset:0;background:rgba(33,48,64,.85);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px';
+    el.innerHTML='<div style="width:40px;height:40px;border:3px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;animation:_sp .8s linear infinite"></div><div id="_ldm" style="color:#fff;font-size:14px;font-family:sans-serif">載入中...</div><style>@keyframes _sp{to{transform:rotate(360deg)}}</style>';
+    document.body.appendChild(el);}
+  el.style.display='flex';
+  document.getElementById('_ldm').textContent=msg||'載入中...';
+}
+function hideLoading(){const el=document.getElementById('_ld');if(el)el.style.display='none';}
 
-// ═══ LINE LOGIN CONFIG
-const LINE_CLIENT_ID = '2009641385';
-const LINE_REDIRECT_URI = 'https://voluble-granita-401749.netlify.app/line-callback.html';
-const LINE_STATE = 'aerial_yoga_' + Math.random().toString(36).slice(2);
+// ═══ LINE LOGIN
+const LINE_CLIENT_ID='2009641385';
+const LINE_REDIRECT_URI='https://voluble-granita-401749.netlify.app/line-callback.html';
+function doLineLogin(){
+  const state='aerial_'+Date.now();
+  sessionStorage.setItem('line_state',state);
+  window.location.href='https://access.line.me/oauth2/v2.1/authorize?'+new URLSearchParams({response_type:'code',client_id:LINE_CLIENT_ID,redirect_uri:LINE_REDIRECT_URI,state,scope:'profile openid'});
+}
+async function handleLineCallback(){
+  const params=new URLSearchParams(window.location.search);
+  const code=params.get('code');
+  if(!code)return false;
+  window.history.replaceState({},'','/');
+  showLoading('LINE 登入中...');
+  try{
+    const res=await fetch('/.netlify/functions/line-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})});
+    const profile=await res.json();
+    if(!profile.userId)throw new Error('no userId');
+    await loginWithLine(profile);
+    return true;
+  }catch(e){console.error('LINE callback error',e);hideLoading();alert('LINE 登入失敗，請再試一次');return false;}
+}
+async function loginWithLine(profile){
+  // Load all data from Firebase
+  showLoading('載入資料...');
+  try{
+    const [fbUsers,fbSch,fbBk,fbPay,fbRf,fbCfg,fbCT]=await Promise.all([
+      fbGetAll('users'),fbGetAll('schedules'),fbGetAll('bookings'),
+      fbGetAll('payments'),fbGetAll('refundRequests'),fbGetAll('config'),fbGetAll('courseTypes')
+    ]);
+    // Users
+    users=fbUsers.length?fbUsers:[...users];
+    // Find or create this user
+    let u=users.find(x=>x.lineUserId===profile.userId);
+    if(!u){
+      const isFirst=users.length===0;
+      u={id:'u_'+profile.userId,name:profile.displayName,lineUserId:profile.userId,
+         pictureUrl:profile.pictureUrl||null,roles:isFirst?['student','admin']:['student'],
+         color:['#7a9db5','#8fa89a','#b9a880','#5c7f97'][Math.floor(Math.random()*4)]};
+      await fbSet('users',u.id,u);
+      users.push(u);
+    }
+    // Schedules
+    if(fbSch.length)schedules=fbSch;
+    else{for(const s of schedules)await fbSet('schedules',s.id,s);}
+    // Bookings
+    if(fbBk.length)bookings=fbBk;
+    // Payments
+    if(fbPay.length)payments=fbPay;
+    // Refunds
+    if(fbRf.length)refundRequests=fbRf;
+    // Config
+    if(fbCfg.length){const c=fbCfg[0];Object.assign(cfg,c);}
+    // CourseTypes
+    if(fbCT.length){courseTypes=fbCT;_ctId=fbCT.length+1;}
+    else{for(const ct of courseTypes)await fbSet('courseTypes',ct.id,ct);}
+    // Login
+    currentUserId=u.id;
+    if(u.roles.includes('student'))activeRole='student';
+    else if(u.roles.includes('teacher'))activeRole='teacher';
+    else activeRole='admin';
+    hideLoading();
+    V(activeRole);
+  }catch(e){console.error('loginWithLine error',e);hideLoading();alert('資料載入失敗：'+e.message);}
+}
 
-// ═══ GLOBAL HANDLER TABLE
-// Use var so _H is automatically window._H (accessible in onclick attributes)
-var _H = {};
-window._H = _H;
+
+
+// ═══ GLOBAL HANDLER TABLE — all event handlers go here, zero inline quotes issues
+const _H = {};
 function _h(fn){ const k='h'+(++_hN); _H[k]=fn; return k; }
 let _hN=0;
 
-// ═══ CONSTANTS
-const NOW = new Date();
+// ═══ DATA
+const NOW = new Date("2026-05-10T18:00:00");
 const ALL_ROLES = ["student","teacher","admin"];
 const RL = {student:"學生",teacher:"老師",admin:"管理員"};
 const CT_COLORS = ["#7a9db5","#8fa89a","#b9a880","#c4856a","#9a7abf","#5c7f97","#bf7a9a","#7abf9a"];
 
-// ═══ LOCAL STATE (synced from Firebase)
-let users = [];
+let users = [
+  {id:"u1",name:"小美",  roles:["student"],         color:"#7a9db5"},
+  {id:"u2",name:"Nina",  roles:["student"],         color:"#8fa89a"},
+  {id:"u3",name:"雅婷",  roles:["student","admin"], color:"#b9a880"},
+  {id:"t1",name:"王老師",roles:["teacher"],         color:"#5c7f97"},
+  {id:"t2",name:"林老師",roles:["teacher","admin"], color:"#8fa89a"},
+  {id:"a1",name:"管理員",roles:["admin"],           color:"#334d5e"},
+];
 let courseTypes = [
   {id:"ct1",name:"空中瑜珈",price:450,comboPrice:400,comboWith:"ct2",color:"#7a9db5",icon:"🧘",maxPeople:8},
   {id:"ct2",name:"空中環",  price:450,comboPrice:null,comboWith:null, color:"#8fa89a",icon:"⭕",maxPeople:8},
 ];
 let _ctId=3;
 const CT_COLORS_LIST = CT_COLORS;
-let cfg={cancelHours:24,bankName:"國泰世華銀行",bankCode:"013",account:"222255588742",payee:"貝你飛空中律動",note:"請匯款後截圖，傳給管理員確認"};
+let cfg={cancelHours:24,bankName:"國泰世華銀行",bankCode:"013",account:"222255588742",payee:"空中律動工作室",note:"請匯款後截圖，傳給管理員確認"};
 const TMPL=[{weekday:2,time:"19:00",type:"空中瑜珈"},{weekday:2,time:"20:15",type:"空中環"},{weekday:4,time:"19:00",type:"空中瑜珈"},{weekday:4,time:"20:15",type:"空中環"}];
 const MIN=3;
-
-let schedules=[];
-let bookings=[];
-let payments=[],refundRequests=[];
-let bidN=10,sidN=100,rfN=1;
-const now=new Date();
-let monthView=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
-let selDate=now.toISOString().slice(0,10);
-let calY=now.getFullYear(),calM=now.getMonth()+1;
-let acalY=now.getFullYear(),acalM=now.getMonth()+1;
-let tcalY=now.getFullYear(),tcalM=now.getMonth()+1;
-let adminSelDate=now.toISOString().slice(0,10),teacherSelDate=now.toISOString().slice(0,10);
-let activeTab={student:"cal",admin:"courses"};
-let currentView="login",currentUserId=null,activeRole=null;
-let expandedRows={};
-let _pickT="",_editT="",_editSid="",_ctColor=CT_COLORS[0],_editCtId="";
-let _statsSearch="",_addSearch="";
-
-
-let _dbLoaded=false;
-
-// ═══ FIREBASE HELPERS
-async function fbSet(col, id, data){ await db.collection(col).doc(id).set(data); }
-async function fbAdd(col, data){ const r=await db.collection(col).add(data); return r.id; }
-async function fbUpdate(col, id, data){ await db.collection(col).doc(id).update(data); }
-async function fbDelete(col, id){ await db.collection(col).doc(id).delete(); }
-async function fbGetAll(col){ const s=await db.collection(col).get(); return s.docs.map(d=>({...d.data(),_fid:d.id})); }
-
-// ═══ LOAD ALL DATA FROM FIREBASE
-async function loadFromFirebase(){
-  showLoading();
-  try {
-    const [fbUsers, fbSchedules, fbBookings, fbPayments, fbRefunds, fbCfg, fbCT] = await Promise.all([
-      fbGetAll('users'), fbGetAll('schedules'), fbGetAll('bookings'),
-      fbGetAll('payments'), fbGetAll('refundRequests'),
-      fbGetAll('config'), fbGetAll('courseTypes')
-    ]);
-    users = fbUsers;
-    if(fbSchedules.length) schedules = fbSchedules;
-    else {
-      schedules = [...buildMonth(new Date().getFullYear(), new Date().getMonth()+1)];
-      await saveSchedulesToFb();
-    }
-    bookings = fbBookings;
-    payments = fbPayments;
-    refundRequests = fbRefunds;
-    if(fbCfg.length){ const c=fbCfg[0]; Object.assign(cfg,c); }
-    if(fbCT.length){ courseTypes=fbCT; _ctId=fbCT.length+1; }
-    else { await saveCTtoFb(); }
-    _dbLoaded=true;
-  } catch(e){
-    console.error('Firebase load error', e);
-    throw e; // re-throw so init() can catch it
-  } finally {
-    hideLoading();
-  }
-}
-
-async function saveSchedulesToFb(){
-  for(const s of schedules){ await fbSet('schedules', s.id, s); }
-}
-async function saveCTtoFb(){
-  for(const ct of courseTypes){ await fbSet('courseTypes', ct.id, ct); }
-}
-
-// ═══ LINE NOTIFY
-async function lineNotify(toUserId, message){
-  if(!toUserId){ console.log('No LINE userId, skip notify'); return; }
-  try {
-    await fetch('/.netlify/functions/line-notify', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ to: toUserId, message })
-    });
-  } catch(e){ console.error('LINE notify error', e); }
-}
-
-// ═══ LINE LOGIN
-function doLineLogin(){
-  const state = 'aerial_' + Date.now();
-  localStorage.setItem('line_state', state);
-  const url = 'https://access.line.me/oauth2/v2.1/authorize?' + new URLSearchParams({
-    response_type: 'code',
-    client_id: LINE_CLIENT_ID,
-    redirect_uri: LINE_REDIRECT_URI,
-    state,
-    scope: 'profile openid',
-  });
-  window.location.href = url;
-}
-
-async function handleLineCallback(){
-  const params = new URLSearchParams(window.location.search);
-  const code = params.get('code');
-  const state = params.get('state');
-  if(!code) return false;
-  // Clear URL
-  window.history.replaceState({}, document.title, '/');
-  showLoading('LINE 登入中...');
-  try {
-    const res = await fetch('/.netlify/functions/line-login', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ code })
-    });
-    const profile = await res.json();
-    if(!profile.userId) throw new Error('No userId');
-    await loginWithLineProfile(profile);
-    return true;
-  } catch(e){
-    console.error('LINE login error', e);
-    hideLoading();
-    alert('LINE 登入失敗，請再試一次');
-    return false;
-  }
-}
-
-async function loginWithLineProfile(profile){
-  await loadFromFirebase();
-  // Check if user exists
-  let user = users.find(u=>u.lineUserId===profile.userId);
-  if(!user){
-    // New user - check if first user (becomes admin)
-    const isFirst = users.length === 0;
-    const color = CT_COLORS[Math.floor(Math.random()*CT_COLORS.length)];
-    const newUser = {
-      id: 'u_'+profile.userId,
-      name: profile.displayName,
-      lineUserId: profile.userId,
-      pictureUrl: profile.pictureUrl||null,
-      roles: isFirst ? ["student","admin"] : ["student"],
-      color
-    };
-    await fbSet('users', newUser.id, newUser);
-    users.push(newUser);
-    user = newUser;
-  }
-  currentUserId = user.id;
-  if(user.roles.includes("student")) activeRole="student";
-  else if(user.roles.includes("teacher")) activeRole="teacher";
-  else activeRole="admin";
-  hideLoading();
-  V(activeRole);
-}
-
-function showLoading(msg){
-  const el=document.getElementById('loading-overlay');
-  if(el){ el.style.display='flex'; el.querySelector('.ld-msg').textContent=msg||'載入中...'; }
-}
-function hideLoading(){
-  const el=document.getElementById('loading-overlay');
-  if(el) el.style.display='none';
-}
 
 const getCTById=id=>courseTypes.find(t=>t.id===id);
 const getCTByName=name=>courseTypes.find(t=>t.name===name)||courseTypes[0];
@@ -478,7 +412,25 @@ function buildMonth(y,m){
   }
   return r.sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
 }
-
+let schedules=[...buildMonth(2026,5),
+  {id:"m1",date:"2026-05-18",time:"14:00",type:"空中環",teacherId:"t2",max:8,min:MIN,cancelHours:null,status:"open",src:"manual"}];
+let bookings=[
+  {id:"b1",sid:"s-2026-5-6-空中瑜珈-19:00",uid:"u1",status:"booked"},
+  {id:"b2",sid:"s-2026-5-6-空中環-20:15",  uid:"u1",status:"booked"},
+  {id:"b3",sid:"s-2026-5-6-空中瑜珈-19:00",uid:"u2",status:"booked"},
+  {id:"b4",sid:"s-2026-5-13-空中瑜珈-19:00",uid:"u1",status:"booked"},
+  {id:"b5",sid:"s-2026-5-13-空中瑜珈-19:00",uid:"u2",status:"booked"},
+];
+let payments=[],refundRequests=[];
+let bidN=10,sidN=100,rfN=1;
+let monthView="2026-05",selDate="2026-05-10";
+let calY=2026,calM=5,acalY=2026,acalM=5,tcalY=2026,tcalM=5;
+let adminSelDate="2026-05-10",teacherSelDate="2026-05-10";
+let activeTab={student:"cal",admin:"courses"};
+let currentView="login",currentUserId=null,activeRole=null;
+let expandedRows={};
+let _pickT="",_editT="",_editSid="",_ctColor=CT_COLORS[0],_editCtId="";
+let _statsSearch="",_addSearch="";
 
 // ═══ HELPERS
 const fmtDate=s=>{const d=new Date(s+"T00:00:00");return (d.getMonth()+1)+"/"+d.getDate()+"（"+"日一二三四五六"[d.getDay()]+"）";};
@@ -502,29 +454,17 @@ function paymentStatus(uid,mv){
   if(p.status==="pending")return "pending";
   return "none";
 }
-async function notifyPayment(uid,mv){
+function notifyPayment(uid,mv){
   const mv2=mv||monthView,{total}=computeBilling(uid,mv2);
-  const pid='pay_'+uid+'_'+mv2;
-  const p={id:pid,uid,month:mv2,paidAmount:total,status:"pending"};
-  const i=payments.findIndex(x=>x.uid===uid&&x.month===mv2);
+  const i=payments.findIndex(p=>p.uid===uid&&p.month===mv2);
   if(i>-1)payments.splice(i,1);
-  payments.push(p);
-  await fbSet('payments', pid, p);
-  // Notify admin via LINE
-  const admins=users.filter(u=>u.roles.includes("admin")&&u.lineUserId);
-  const uname=users.find(u=>u.id===uid)?.name||"學員";
-  for(const a of admins){
-    await lineNotify(a.lineUserId, `💰 付款通知\n${uname} 已完成匯款\n${mv2} 月費用：$${total.toLocaleString()}\n請至系統確認收款`);
-  }
-  render();
+  payments.push({uid,month:mv2,paidAmount:total,status:"pending"});render();
 }
-async function confirmPayment(uid,mv){
+function confirmPayment(uid,mv){
   const mv2=mv||monthView,{total}=computeBilling(uid,mv2);
-  const pid='pay_'+uid+'_'+mv2;
-  const p={id:pid,uid,month:mv2,paidAmount:total,status:"confirmed"};
-  const i=payments.findIndex(x=>x.uid===uid&&x.month===mv2);
-  if(i>-1)payments[i]=p; else payments.push(p);
-  await fbSet('payments', pid, p);
+  const i=payments.findIndex(p=>p.uid===uid&&p.month===mv2);
+  if(i>-1)payments[i]={uid,month:mv2,paidAmount:total,status:"confirmed"};
+  else payments.push({uid,month:mv2,paidAmount:total,status:"confirmed"});
   render();
 }
 
@@ -553,47 +493,33 @@ function computeBilling(uid,mv){
 }
 
 // ═══ ACTIONS
-async function doBook(sid,uid){
+function doBook(sid,uid){
   if(!uid)uid=currentUserId;
   const s=schedules.find(x=>x.id===sid);if(!s)return;
-  const status=bkdCnt(sid)>=s.max?"waitlist":"booked";
-  const bk={id:"b"+(bidN++),sid,uid,status};
-  bookings.push(bk);
-  await fbSet('bookings', bk.id, bk);
-  render();
+  bookings.push({id:"b"+(bidN++),sid,uid,status:bkdCnt(sid)>=s.max?"waitlist":"booked"});render();
 }
-async function doCancel(sid,uid){
+function doCancel(sid,uid){
   if(!uid)uid=currentUserId;
   const s=schedules.find(x=>x.id===sid);if(!s)return;
   if(!canCancelS(s))return;
   const i=bookings.findIndex(b=>b.sid===sid&&b.uid===uid&&b.status==="booked");
   if(i>-1){
     const bid=bookings[i].id;
-    await fbDelete('bookings', bid);
     bookings.splice(i,1);
     const mv=s.date.slice(0,7);
     const pst=paymentStatus(uid,mv);
     if((pst==="confirmed"||pst==="pending")&&!refundRequests.find(r=>r.bid===bid)){
       const ct=getCTByName(s.type);
-      const rf={id:"rf"+(rfN++),bid,uid,sid,amount:ct?ct.price:450,
-        reason:"取消課程退費（"+s.type+" "+fmtDate(s.date)+"）",status:"pending",auto:true};
-      refundRequests.push(rf);
-      await fbSet('refundRequests', rf.id, rf);
-      // Notify admin
-      const admins=users.filter(u=>u.roles.includes("admin")&&u.lineUserId);
-      const uname=users.find(u=>u.id===uid)?.name||"學員";
-      for(const a of admins){
-        await lineNotify(a.lineUserId, `⚠️ 退費申請\n${uname} 取消了 ${s.type} ${fmtDate(s.date)} ${s.time}\n退費金額：$${ct?ct.price:450}`);
-      }
+      refundRequests.push({id:"rf"+(rfN++),bid,uid,sid,amount:ct?ct.price:450,
+        reason:"取消課程退費（"+s.type+" "+fmtDate(s.date)+"）",status:"pending",auto:true});
     }
   }
   render();
 }
-async function doCancelWait(sid,uid){
+function doCancelWait(sid,uid){
   if(!uid)uid=currentUserId;
   const i=bookings.findIndex(b=>b.sid===sid&&b.uid===uid&&b.status==="waitlist");
-  if(i>-1){ await fbDelete('bookings', bookings[i].id); bookings.splice(i,1); }
-  render();
+  if(i>-1)bookings.splice(i,1);render();
 }
 function confirmCancel(sid,uid){
   if(!uid)uid=currentUserId;
@@ -608,21 +534,12 @@ function confirmCancel(sid,uid){
       +'<div style="padding:10px 12px;background:var(--bg);border-radius:8px;border:.5px solid var(--brd);font-size:13px"><div style="font-weight:500;margin-bottom:4px">'+s.type+'</div><div style="font-size:12px;color:var(--t3)">'+fmtDate(s.date)+' '+s.time+'</div></div>',
       ()=>{doCancel(sid,uid);closeModal();render();},"確認取消並申請退費");
   } else {
-    doCancel(sid,uid);
+    doCancel(sid,uid);  // no modal needed, just cancel directly
   }
 }
-async function doStop(id){
-  const s=schedules.find(x=>x.id===id);
-  if(s){s.status="stopped";await fbUpdate('schedules',id,{status:"stopped"});}
-  render();
-}
-async function doDelete(id){
-  if(!confirm("確定刪除此課程？"))return;
-  await fbDelete('schedules',id);
-  schedules=schedules.filter(s=>s.id!==id);
-  render();
-}
-async function approveRefund(id){
+function doStop(id){const s=schedules.find(x=>x.id===id);if(s)s.status="stopped";render();}
+function doDelete(id){if(!confirm("確定刪除此課程？"))return;schedules=schedules.filter(s=>s.id!==id);render();}
+function approveRefund(id){
   const rf=refundRequests.find(x=>x.id===id);if(!rf)return;
   const u=users.find(x=>x.id===rf.uid);
   const s=schedules.find(x=>x.id===rf.sid);
@@ -632,51 +549,46 @@ async function approveRefund(id){
     +'<div style="font-size:12px;color:var(--t3);margin-top:2px">'+(s?s.type+" "+fmtDate(s.date):"")+'</div></div></div>'
     +'<div class="info-box">退費金額：<strong>$'+rf.amount.toLocaleString()+'</strong><br>原因：'+rf.reason+'</div>'
     +'<div style="background:var(--bg);border-radius:8px;padding:11px 13px;border:.5px solid var(--brd)">'
-    +'<div style="font-size:11px;color:var(--t3);font-weight:500;margin-bottom:8px">核准後將自動發 LINE 通知給學員</div></div>';
-  showModal("核准退費 — "+(u?u.name:""),body,async ()=>{
+    +'<div style="font-size:11px;color:var(--t3);font-weight:500;margin-bottom:8px">核准後通知方式</div>'
+    +'<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:8px"><input type="checkbox" id="rf-nl" checked style="accent-color:var(--mb5);width:15px;height:15px"> LINE 通知（模擬）</label>'
+    +'<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="rf-ne" style="accent-color:var(--mb5);width:15px;height:15px"> Email 通知（模擬）</label></div>';
+  showModal("核准退費 — "+(u?u.name:""),body,()=>{
     rf.status="approved";
-    await fbUpdate('refundRequests', rf.id, {status:"approved"});
+    const nl=document.getElementById("rf-nl")?.checked;
+    const ne=document.getElementById("rf-ne")?.checked;
     closeModal();
-    // Send real LINE notification to student
-    if(u&&u.lineUserId){
-      await lineNotify(u.lineUserId, `✅ 退費核准通知\n您的退費申請已核准！\n課程：${s?s.type:""} ${s?fmtDate(s.date):""}\n退費金額：$${rf.amount.toLocaleString()}\n款項將於近日退回，謝謝！`);
-      showModalInfo("✅ 退費已核准", '<div class="banner green"><div class="bicon">💬</div><div><div class="btitle">LINE 通知已發送</div><div class="bsub">已通知 '+(u.name)+'，退費 $'+rf.amount.toLocaleString()+' 核准。</div></div></div>');
-    } else {
-      render();
-    }
+    const msgs=[];
+    if(nl)msgs.push('<div style="display:flex;gap:10px;padding:12px;background:#eafcf0;border-radius:8px;border:.5px solid #a0d8b0"><span style="font-size:18px">💬</span><div><div style="font-size:12px;font-weight:500;color:#1a7a3a">LINE 已送出（模擬）</div><div style="font-size:11px;color:#3a8a4a;margin-top:4px;line-height:1.7">「'+(u?u.name:"")+' 您好！您的退費申請 $'+rf.amount.toLocaleString()+' 已核准，款項將於近日退回，謝謝！」</div></div></div>');
+    if(ne)msgs.push('<div style="display:flex;gap:10px;padding:12px;background:#eaf0fc;border-radius:8px;border:.5px solid #a0b8e8"><span style="font-size:18px">📧</span><div><div style="font-size:12px;font-weight:500;color:#1a3a7a">Email 已送出（模擬）</div><div style="font-size:11px;color:#3a5a9a;margin-top:4px;line-height:1.7">收件人：'+(u?u.name:"")+'<br>退費 $'+rf.amount.toLocaleString()+' 已核准，款項將退回您的帳戶。</div></div></div>');
+    if(msgs.length)showModalInfo("✅ 退費已核准",msgs.join(""));else render();
   },"確認核准並通知");
 }
-async function rejectRefund(id){
+function rejectRefund(id){
   const r=refundRequests.find(x=>x.id===id);if(!r)return;
   const u=users.find(x=>x.id===r.uid);
   if(!confirm("確定拒絕 "+(u?u.name:"")+" 的退費申請 $"+r.amount.toLocaleString()+"？"))return;
-  r.status="rejected";
-  await fbUpdate('refundRequests', r.id, {status:"rejected"});
-  render();
+  r.status="rejected";render();
 }
 function adminForceConfirm(uid,mv){confirmPayment(uid,mv);}
-async function doCopyLastMonth(){
+function doCopyLastMonth(){
   const p=monthView.split("-").map(Number);let py=p[0],pm=p[1]-1;if(pm<1){pm=12;py--;}
   const pk=py+"-"+String(pm).padStart(2,"0");
   const prev=schedules.filter(s=>s.date.startsWith(pk));
   if(!prev.length){alert("上個月沒有課程可複製");return;}
   let added=0;const days=new Date(p[0],p[1],0).getDate();
-  const newOnes=[];
   prev.forEach(s=>{
     const wd=new Date(s.date+"T00:00:00").getDay();
     for(let d=1;d<=days;d++){
       if(new Date(p[0],p[1]-1,d).getDay()===wd){
         const nd=p[0]+"-"+String(p[1]).padStart(2,"0")+"-"+String(d).padStart(2,"0");
         if(!schedules.some(x=>x.date===nd&&x.time===s.time&&x.type===s.type)){
-          const ns={id:"s-"+p[0]+"-"+p[1]+"-"+d+"-"+s.type+"-"+s.time,
+          schedules.push({id:"s-"+p[0]+"-"+p[1]+"-"+d+"-"+s.type+"-"+s.time,
             date:nd,time:s.time,type:s.type,teacherId:s.teacherId||"t1",
-            max:s.max,min:s.min,cancelHours:s.cancelHours,status:"open",src:"copy"};
-          schedules.push(ns);newOnes.push(ns);added++;
+            max:s.max,min:s.min,cancelHours:s.cancelHours,status:"open",src:"copy"});added++;
         }
       }
     }
   });
-  for(const s of newOnes) await fbSet('schedules', s.id, s);
   alert(added>0?"已複製 "+added+" 堂到 "+monthView:monthView+" 已有相同課程");render();
 }
 
@@ -1050,8 +962,8 @@ function pageAdminStats(){
     +'<div style="display:flex;align-items:center;gap:8px"><span class="sec-title">費用明細</span>'
     +'<select id="mv-sel" onchange="_H.'+mChk+'()" style="padding:5px 10px;border-radius:8px;border:.5px solid var(--brd);background:var(--bg);font-size:12px;font-family:inherit;color:var(--t1);outline:none">'+monthOpts+'</select></div>'
     +'<div style="display:flex;gap:6px;align-items:center">'
-    +'<div class="srch-wrap" style="width:auto"><input id="stats-search" type="text" value="'+_statsSearch+'" placeholder="搜尋學員…" oninput="window._setStatsSearch(this.value)" style="font-size:12px;padding:6px 28px 6px 10px;width:120px"><span class="srch-ico">🔍</span></div>'
-    +(sq?(()=>{const clhk=_h(()=>{window._setStatsSearch("");});return '<button onclick="_H.'+clhk+'()" style="padding:5px 9px;border-radius:6px;border:.5px solid var(--brd);background:var(--sur);font-size:11px;cursor:pointer;color:var(--t3);font-family:inherit">清除</button>';})():"")
+    +'<div class="srch-wrap" style="width:auto"><input id="stats-search" type="text" value="'+_statsSearch+'" placeholder="搜尋學員…" oninput="_statsSearch=this.value;updateStatsTable()" style="font-size:12px;padding:6px 28px 6px 10px;width:120px"><span class="srch-ico">🔍</span></div>'
+    +(sq?(()=>{const clhk=_h(()=>{_statsSearch="";updateStatsTable();});return '<button onclick="_H.'+clhk+'()" style="padding:5px 9px;border-radius:6px;border:.5px solid var(--brd);background:var(--sur);font-size:11px;cursor:pointer;color:var(--t3);font-family:inherit">清除</button>';})():"")
     +'</div></div>'
     +'<div id="stats-table-wrap">'+buildStatsTable(studs,allTotal,sq)+'</div>'
     +'<div class="sec-title" style="margin-top:12px">會員管理</div>'
@@ -1131,14 +1043,13 @@ function pageSettingsFull(){
     +'<button class="btn-sec" onclick="_H.'+canchk+'()">取消</button>'
     +'<button class="btn-save" onclick="_H.'+savehk+'()">儲存設定</button></div>';
 }
-async function saveSettings(){
+function saveSettings(){
   cfg.cancelHours=Number(document.getElementById("sf-cancel")?.value)||cfg.cancelHours;
   cfg.bankName=document.getElementById("sf-bname")?.value||cfg.bankName;
   cfg.bankCode=document.getElementById("sf-bcode")?.value||cfg.bankCode;
   cfg.account=document.getElementById("sf-acc")?.value||cfg.account;
   cfg.payee=document.getElementById("sf-payee")?.value||cfg.payee;
   cfg.note=document.getElementById("sf-note")?.value||cfg.note;
-  await fbSet('config', 'main', cfg);
   const st=document.getElementById("save-st");
   if(st){st.textContent="✓ 已儲存";st.classList.add("show");setTimeout(()=>st.classList.remove("show"),2500);}
   render();
@@ -1228,7 +1139,7 @@ function updateCPrev(){
     +'<div class="cprev-r"><span class="cprev-k">老師</span><span class="cprev-v">'+tname+'</span></div>'
     +'<div class="cprev-r"><span class="cprev-k">上限/截止</span><span class="cprev-v">'+maxP+' 人 / 前 '+cancelH+'h</span></div>';
 }
-async function confirmAddCourse(){
+function confirmAddCourse(){
   const date=document.getElementById("nc-date")?.value;
   const time=document.getElementById("nc-time")?.value;
   const type=document.getElementById("nc-type")?.value||(courseTypes[0]?courseTypes[0].name:"");
@@ -1238,25 +1149,7 @@ async function confirmAddCourse(){
   if(!date||!time){alert("請填寫日期和時間");return;}
   const ps=monthView.split("-").map(Number),ds=date.split("-").map(Number);
   if(ds[0]!==ps[0]||ds[1]!==ps[1]){alert("請輸入 "+monthView+" 的日期");return;}
-  const newS={id:"m"+(sidN++),date,time,type,teacherId:tid,max:maxP,min:MIN,cancelHours:isNaN(cancelH)?null:cancelH,status:"open",src:"manual"};
-  schedules.push(newS);
-  await fbSet('schedules', newS.id, newS);
-  // Notify all students with LINE
-  const studs=users.filter(u=>u.roles.includes("student")&&u.lineUserId);
-  for(const u of studs){
-    await lineNotify(u.lineUserId, `📅 新增課程通知\n${type} 新增了一堂課！\n日期：${fmtDate(date)} ${time}\n老師：${getTname(tid)}\n快去預約吧！`);
-  }
-  closeModal();render();
-}
-async function confirmEditCourse(){
-  const s=schedules.find(x=>x.id===_editSid);if(!s)return;
-  s.type=document.getElementById("ec-type")?.value||s.type;
-  s.time=document.getElementById("ec-time")?.value||s.time;
-  s.max=Number(document.getElementById("ec-max")?.value)||s.max;
-  const ch=Number(document.getElementById("ec-cancel")?.value);
-  s.cancelHours=isNaN(ch)?null:ch;
-  s.teacherId=_editT||s.teacherId;
-  await fbSet('schedules', s.id, s);
+  schedules.push({id:"m"+(sidN++),date,time,type,teacherId:tid,max:maxP,min:MIN,cancelHours:isNaN(cancelH)?null:cancelH,status:"open",src:"manual"});
   closeModal();render();
 }
 function openEditCourse(sid){
@@ -1290,9 +1183,8 @@ function openAddStudent(sid){
   _addSearch="";
   const allAvail=getStudents().filter(u=>!uBooked(sid,u.id)&&!uWait(sid,u.id));
   if(!allAvail.length){showModalInfo("加入學員",'<div class="info-box">所有學員已在名單中</div>');return;}
-  window._currentSid=sid;
   const body='<div class="mf"><label class="ml">搜尋學員</label>'
-    +'<div class="srch-wrap"><input id="add-srch" type="text" placeholder="輸入姓名…" oninput="_addSearch=this.value;document.getElementById(\"add-list\").innerHTML=buildAddList(getStudents().filter(u=>!uBooked(_currentSid,u.id)&&!uWait(_currentSid,u.id)),_currentSid)"><span class="srch-ico">🔍</span></div></div>'
+    +'<div class="srch-wrap"><input id="add-srch" type="text" placeholder="輸入姓名…" oninput="_addSearch=this.value;refreshAddList(\''+sid+'\')"><span class="srch-ico">🔍</span></div></div>'
     +'<div class="mf"><label class="ml">選擇學員</label><div id="add-list">'+buildAddList(allAvail,sid)+'</div></div>';
   showModal("加入學員",body,()=>{
     const sel=document.getElementById("add-sel");if(!sel||!sel.value){alert("請選擇學員");return;}
@@ -1328,30 +1220,29 @@ function openConfirmPayment(uid,mv){
     +'<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="ne" style="accent-color:var(--mb5);width:15px;height:15px"> Email 通知（模擬）</label></div>';
   showModal("確認收款 — "+u.name,body,()=>doConfirmPayment(uid,mv),"確認收款並通知");
 }
-async function doConfirmPayment(uid,mv){
-  const nl=document.getElementById("nl")?.checked;
-  await confirmPayment(uid,mv);closeModal();
+function doConfirmPayment(uid,mv){
+  const nl=document.getElementById("nl")?.checked,ne=document.getElementById("ne")?.checked;
+  confirmPayment(uid,mv);closeModal();
   const u=users.find(x=>x.id===uid);const{total}=computeBilling(uid,mv);
-  if(nl&&u&&u.lineUserId){
-    await lineNotify(u.lineUserId, `✅ 付款確認\n${u.name} 您好！\n${mv} 月費用 $${total.toLocaleString()} 已確認收款，謝謝！`);
-    showModalInfo("✅ 已確認收款",'<div class="banner green"><div class="bicon">💬</div><div><div class="btitle">LINE 通知已發送</div><div class="bsub">已通知 '+(u?u.name:"")+' $'+total.toLocaleString()+' 確認收款。</div></div></div>');
-  } else { render(); }
+  const msgs=[];
+  if(nl)msgs.push('<div style="display:flex;gap:10px;padding:12px;background:#eafcf0;border-radius:8px;border:.5px solid #a0d8b0"><span style="font-size:18px">💬</span><div><div style="font-size:12px;font-weight:500;color:#1a7a3a">LINE 已送出（模擬）</div><div style="font-size:11px;color:#3a8a4a;margin-top:4px;line-height:1.7">「'+(u?u.name:"")+' 您好！'+mv+' 費用 $'+total.toLocaleString()+' 已確認，謝謝！」</div></div></div>');
+  if(ne)msgs.push('<div style="display:flex;gap:10px;padding:12px;background:#eaf0fc;border-radius:8px;border:.5px solid #a0b8e8"><span style="font-size:18px">📧</span><div><div style="font-size:12px;font-weight:500;color:#1a3a7a">Email 已送出（模擬）</div><div style="font-size:11px;color:#3a5a9a;margin-top:4px;line-height:1.7">收件人：'+(u?u.name:"")+'<br>費用 $'+total.toLocaleString()+' 已確認收款。</div></div></div>');
+  if(msgs.length)showModalInfo("✅ 已確認收款",msgs.join(""));else render();
 }
 
 // ═══ EDIT ROLE
-async function openEditRole(uid){
+function openEditRole(uid){
   const u=users.find(x=>x.id===uid);if(!u)return;
   const body='<div style="display:flex;align-items:center;gap:10px;padding:11px 12px;background:var(--bg);border-radius:8px;border:.5px solid var(--brd)">'
     +'<div style="width:32px;height:32px;border-radius:50%;background:'+u.color+';display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff;font-weight:500">'+u.name[0]+'</div>'
-    +'<div><div style="font-size:13px;font-weight:500">'+u.name+'</div><div style="font-size:11px;color:var(--t3)">LINE: '+(u.lineUserId?'已連結':'未連結')+'</div></div></div>'
+    +'<div><div style="font-size:13px;font-weight:500">'+u.name+'</div></div></div>'
     +'<div class="mf"><label class="ml">角色（可複選）</label>'
     +'<div class="rcbg">'+ALL_ROLES.map(r=>'<label class="rcb"><input type="checkbox" id="rc-'+r+'" '+(u.roles.includes(r)?"checked":"")+'>'+RL[r]+'</label>').join("")+'</div>'
     +'<span class="mhint">一個帳號可同時擁有多種角色</span></div>';
-  showModal("編輯角色 — "+u.name,body,async ()=>{
+  showModal("編輯角色 — "+u.name,body,()=>{
     const newRoles=ALL_ROLES.filter(r=>document.getElementById("rc-"+r)?.checked);
     if(!newRoles.length){alert("至少選一個角色");return;}
-    const i=users.findIndex(x=>x.id===uid);
-    if(i>-1){ users[i].roles=newRoles; await fbUpdate('users', uid, {roles:newRoles}); }
+    const i=users.findIndex(x=>x.id===uid);if(i>-1)users[i].roles=newRoles;
     closeModal();render();
   },"儲存");
 }
@@ -1402,7 +1293,7 @@ function openEditCT(id){
     closeModal();render();
   },"儲存");
 }
-async function deleteCT(id){
+function deleteCT(id){
   if(courseTypes.length<=1){alert("至少保留一種課程類型");return;}
   const ct=getCTById(id);if(!ct)return;
   if(!confirm("確定刪除「"+ct.name+"」？"))return;
@@ -1417,10 +1308,11 @@ function renderLogin(){
   return '<div class="login-wrap"><div class="login-card">'
     +'<div class="login-icon"><svg width="24" height="24" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 5.37 2 9.5c0 3.68 3.18 6.73 7.5 7.38V19l3-2c.17 0 .33.01.5.01 5.52 0 10-3.37 10-7.51C23 5.37 18.52 2 12 2z" fill="#5c7f97"/></svg></div>'
     +'<div class="login-title">貝你飛・空中律動</div>'
-    +'<div class="login-sub">課程預約系統<br>使用 LINE 帳號登入，即可預約課程</div>'
+    +'<div class="login-sub">課程預約系統<br>使用 LINE 帳號登入</div>'
     +'<button class="line-btn" onclick="_H.'+lhk+'()">使用 LINE 登入</button>'
     +'</div></div>';
 }
+
 function loginAs(uid){
   currentUserId=uid;const u=users.find(x=>x.id===uid);if(!u)return;
   // Priority: student first (so multi-role users land on student), then teacher, then admin
@@ -1486,48 +1378,19 @@ function render(){
   }
 }
 
-// ═══ WINDOW EXPORTS (must be after all function definitions)
-window._setStatsSearch = (v)=>{ _statsSearch=v; updateStatsTable(); };
-window._setAddSearch = (v,sid)=>{ _addSearch=v; refreshAddList(sid); };
-window.toggleExp = (id)=>toggleExp(id);
-window.setSelDate = (d)=>setSelDate(d);
-window.setTeacherSelDate = (d)=>setTeacherSelDate(d);
-window.setAdminSelDate = (d)=>setAdminSelDate(d);
-window.calPrev = ()=>calPrev();
-window.calNext = ()=>calNext();
-window.tcalPrev = ()=>tcalPrev();
-window.tcalNext = ()=>tcalNext();
-window.acalPrev = ()=>acalPrev();
-window.acalNext = ()=>acalNext();
-window.mvPrev = ()=>mvPrev();
-window.mvNext = ()=>mvNext();
-window.updateCPrev = ()=>updateCPrev();
-window.updateStatsTable = ()=>updateStatsTable();
-window.refreshAddList = (sid)=>refreshAddList(sid);
-window.copyAccount = ()=>copyAccount();
-window.doLineLogin = doLineLogin;
-
-// ═══ STARTUP
 async function init(){
-  try {
-    // Check if returning from LINE Login callback
+  try{
     if(window.location.search.includes('code=')){
-      const handled = await handleLineCallback();
-      if(handled) return;
+      const ok=await handleLineCallback();
+      if(ok)return;
     }
-    // Load data then show login
-    await loadFromFirebase();
-    render();
-  } catch(e) {
-    console.error('Init error:', e);
-    const ca = document.getElementById('content-area');
-    if(ca) ca.innerHTML = '<div style="padding:30px;font-family:sans-serif;color:#c44;max-width:500px;margin:0 auto">'
-      + '<h3>系統啟動失敗</h3><p style="margin-top:10px;font-size:13px;color:#666">錯誤：'+e.message+'</p>'
-      + '<p style="margin-top:8px;font-size:12px;color:#999">請重新整理頁面，或聯絡管理員</p></div>';
-    hideLoading();
+    render(); // show login screen
+  }catch(e){
+    console.error('init error',e);
+    const ca=document.getElementById('content-area');
+    if(ca)ca.innerHTML='<div style="padding:30px;color:#c44">系統啟動失敗：'+e.message+'</div>';
   }
 }
 init();
+
 </script>
-</body>
-</html>

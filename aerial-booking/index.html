@@ -247,13 +247,7 @@ body{font-family:"Noto Sans TC",sans-serif;background:var(--bg);color:var(--t1);
 </head>
 <body>
 <div class="wrap">
-  <div class="dbar" id="dbar">
-    <button class="vbtn on" id="vbtn-login" onclick="_H.vlogin()">登入頁</button>
-    <button class="vbtn" id="vbtn-student" onclick="_H.vstudent()">📱 學生</button>
-    <button class="vbtn" id="vbtn-teacher" onclick="_H.vteacher()">老師</button>
-    <button class="vbtn" id="vbtn-admin" onclick="_H.vadmin()">後台管理</button>
-    <span class="dbanner">測試版・資料不會儲存</span>
-  </div>
+
   <div class="app">
     <div id="topbar-area"></div>
     <div id="content-area"></div>
@@ -570,6 +564,28 @@ function rejectRefund(id){
   r.status="rejected";render();
 }
 function adminForceConfirm(uid,mv){confirmPayment(uid,mv);}
+function doCopyLastWeek(){
+  const today=new Date(selDate||adminSelDate);
+  // Find the week that started 7 days ago
+  const weekStart=new Date(today);weekStart.setDate(weekStart.getDate()-7);
+  const weekEnd=new Date(weekStart);weekEnd.setDate(weekEnd.getDate()+6);
+  const fmt=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+  const ws=fmt(weekStart),we=fmt(weekEnd);
+  const prev=schedules.filter(s=>s.date>=ws&&s.date<=we);
+  if(!prev.length){alert("上週沒有課程可複製");return;}
+  let added=0;
+  prev.forEach(s=>{
+    const old=new Date(s.date+"T00:00:00");
+    const nDate=new Date(old);nDate.setDate(nDate.getDate()+7);
+    const nd=fmt(nDate);
+    if(!schedules.some(x=>x.date===nd&&x.time===s.time&&x.type===s.type)){
+      schedules.push({id:"s-"+nd.replace(/-/g,"")+"-"+s.type+"-"+s.time,
+        date:nd,time:s.time,type:s.type,teacherId:s.teacherId,
+        max:s.max,min:s.min,cancelHours:s.cancelHours,status:"open",src:"copy"});added++;
+    }
+  });
+  alert(added>0?"已複製 "+added+" 堂到下週":already);render();
+}
 function doCopyLastMonth(){
   const p=monthView.split("-").map(Number);let py=p[0],pm=p[1]-1;if(pm<1){pm=12;py--;}
   const pk=py+"-"+String(pm).padStart(2,"0");
@@ -851,7 +867,7 @@ function pageAdminCourses(){
   const stats=[["本月課程",ms.length+"","堂",true],["本月預約",bookings.filter(b=>b.status==="booked").length+"","人次",false],
     ["平均滿班率",(ms.length?Math.round(ms.reduce((s,c)=>s+bkdCnt(c.id),0)/ms.length/8*100):0)+"%","",false],
     ["預估收入","$"+totalRev.toLocaleString(),"",false]];
-  const mvph=_h(mvPrev),mvnh=_h(mvNext),addch=_h(openAddCourse),cpyh=_h(doCopyLastMonth);
+  const mvph=_h(mvPrev),mvnh=_h(mvNext),addch=_h(openAddCourse),cpyh=_h(doCopyLastMonth),cpywh=_h(doCopyLastWeek);
   return '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px">'
     +stats.map(([l,v,u,hl])=>'<div style="background:'+(hl?"var(--mb7)":"var(--sur)")+';border-radius:8px;border:.5px solid '+(hl?"var(--mb7)":"var(--brd)")+';padding:11px 13px">'
       +'<div style="font-size:11px;color:'+(hl?"rgba(255,255,255,.4)":"var(--t3)")+';margin-bottom:3px">'+l+'</div>'
@@ -869,7 +885,7 @@ function pageAdminCourses(){
     +'<button class="mv-btn" onclick="_H.'+mvnh+'()">›</button></div>'
     +'<div class="tool-acts">'
     +'<button class="btn-add" onclick="_H.'+addch+'()">＋ 新增課程</button>'
-    +'<button class="btn-copy" onclick="_H.'+cpyh+'()">📋 複製上月</button>'
+    +'<button class="btn-copy" onclick="_H.'+cpyh+'()">📋 複製上月</button>'+'<button class="btn-copy" onclick="_H.'+cpywh+'()">📋 複製上週</button>'
     +'</div></div>'
     +'<div class="sec-title">本月課程總覽</div>'
     +(dates.length===0?'<div class="info-box">本月尚無課程</div>':dates.map(date=>{
@@ -1186,10 +1202,12 @@ function openAddStudent(sid){
   const body='<div class="mf"><label class="ml">搜尋學員</label>'
     +'<div class="srch-wrap"><input id="add-srch" type="text" placeholder="輸入姓名…" oninput="_addSearch=this.value;refreshAddList(\''+sid+'\')"><span class="srch-ico">🔍</span></div></div>'
     +'<div class="mf"><label class="ml">選擇學員</label><div id="add-list">'+buildAddList(allAvail,sid)+'</div></div>';
-  showModal("加入學員",body,()=>{
+  showModal("加入學員",body,async ()=>{
     const sel=document.getElementById("add-sel");if(!sel||!sel.value){alert("請選擇學員");return;}
     const sc=schedules.find(x=>x.id===sid);
-    bookings.push({id:"b"+(bidN++),sid,uid:sel.value,status:bkdCnt(sid)>=(sc?sc.max:8)?"waitlist":"booked"});
+    const bk={id:"b"+(bidN++),sid,uid:sel.value,status:bkdCnt(sid)>=(sc?sc.max:8)?"waitlist":"booked"};
+    bookings.push(bk);
+    try{await fbSet('bookings',bk.id,bk);}catch(e){console.error('fbSet booking',e);}
     closeModal();render();
   },"加入");
 }

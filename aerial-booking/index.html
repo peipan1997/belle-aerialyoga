@@ -480,12 +480,15 @@ function computeBilling(uid,mv){
 }
 
 // ═══ ACTIONS
-function doBook(sid,uid){
+async function doBook(sid,uid){
   if(!uid)uid=currentUserId;
   const s=schedules.find(x=>x.id===sid);if(!s)return;
-  bookings.push({id:"b"+(bidN++),sid,uid,status:bkdCnt(sid)>=s.max?"waitlist":"booked"});render();
+  const bk={id:"b"+(bidN++),sid,uid,status:bkdCnt(sid)>=s.max?"waitlist":"booked"};
+  bookings.push(bk);
+  try{await fbSet("bookings",bk.id,bk);}catch(e){console.error(e);}
+  render();
 }
-function doCancel(sid,uid){
+async function doCancel(sid,uid){
   if(!uid)uid=currentUserId;
   const s=schedules.find(x=>x.id===sid);if(!s)return;
   if(!canCancelS(s))return;
@@ -493,6 +496,7 @@ function doCancel(sid,uid){
   if(i>-1){
     const bid=bookings[i].id;
     bookings.splice(i,1);
+    try{await fbDelete("bookings",bid);}catch(e){console.error(e);}
     const mv=s.date.slice(0,7);
     const pst=paymentStatus(uid,mv);
     if((pst==="confirmed"||pst==="pending")&&!refundRequests.find(r=>r.bid===bid)){
@@ -524,8 +528,8 @@ function confirmCancel(sid,uid){
     doCancel(sid,uid);  // no modal needed, just cancel directly
   }
 }
-function doStop(id){const s=schedules.find(x=>x.id===id);if(s)s.status="stopped";render();}
-function doDelete(id){if(!confirm("確定刪除此課程？"))return;schedules=schedules.filter(s=>s.id!==id);render();}
+async function doStop(id){const s=schedules.find(x=>x.id===id);if(s){s.status="stopped";try{await fbUpdate("schedules",id,{status:"stopped"});}catch(e){console.error(e);}}render();}
+async function doDelete(id){if(!confirm("確定刪除此課程？"))return;schedules=schedules.filter(s=>s.id!==id);try{await fbDelete("schedules",id);}catch(e){console.error(e);}render();}
 function approveRefund(id){
   const rf=refundRequests.find(x=>x.id===id);if(!rf)return;
   const u=users.find(x=>x.id===rf.uid);
@@ -866,7 +870,7 @@ function pageAdminCourses(){
   const stats=[["本月課程",ms.length+"","堂",true],["本月預約",bookings.filter(b=>b.status==="booked").length+"","人次",false],
     ["平均滿班率",(ms.length?Math.round(ms.reduce((s,c)=>s+bkdCnt(c.id),0)/ms.length/8*100):0)+"%","",false],
     ["預估收入","$"+totalRev.toLocaleString(),"",false]];
-  const mvph=_h(mvPrev),mvnh=_h(mvNext),addch=_h(openAddCourse),cpyh=_h(doCopyLastMonth),cpywh=_h(doCopyLastWeek);
+  const mvph=_h(mvPrev),mvnh=_h(mvNext),addch=_h(()=>openAddCourse(adminSelDate)),cpyh=_h(doCopyLastMonth),cpywh=_h(doCopyLastWeek);
   return '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px">'
     +stats.map(([l,v,u,hl])=>'<div style="background:'+(hl?"var(--mb7)":"var(--sur)")+';border-radius:8px;border:.5px solid '+(hl?"var(--mb7)":"var(--brd)")+';padding:11px 13px">'
       +'<div style="font-size:11px;color:'+(hl?"rgba(255,255,255,.4)":"var(--t3)")+';margin-bottom:3px">'+l+'</div>'
@@ -1115,15 +1119,15 @@ function cswHtml(selColor){
 }
 
 // ═══ ADD/EDIT COURSE
-function openAddCourse(){
-  const p=monthView.split("-");const minD=p[0]+"-"+p[1]+"-01";
-  const maxD=p[0]+"-"+p[1]+"-"+String(new Date(+p[0],+p[1],0).getDate()).padStart(2,"0");
+function openAddCourse(defaultDate){
+  // defaultDate: optional pre-filled date (from calendar click)
+  const initDate=defaultDate||selDate||adminSelDate||_todayStr;
   _pickT=getTeachers()[0]?.id||"";
   const typeOpts=courseTypes.map(ct=>'<option value="'+ct.name+'">'+ct.icon+' '+ct.name+'</option>').join("");
   const defMax=courseTypes[0]?courseTypes[0].maxPeople:8;
   const body='<div class="mg2">'
     +'<div class="mf"><label class="ml">課程類型</label><select class="ms" id="nc-type" onchange="updateCPrev()">'+typeOpts+'</select></div>'
-    +'<div class="mf"><label class="ml">日期（限 '+monthView+'）</label><input class="mi" id="nc-date" type="date" min="'+minD+'" max="'+maxD+'" value="'+minD+'" oninput="updateCPrev()"></div>'
+    +'<div class="mf"><label class="ml">日期</label><input class="mi" id="nc-date" type="date" value="'+initDate+'" oninput="updateCPrev()"></div>'
     +'<div class="mf"><label class="ml">開始時間</label><input class="mi" id="nc-time" type="time" value="19:00" oninput="updateCPrev()"></div>'
     +'<div class="mf"><label class="ml">時長（分鐘）</label><input class="mi" id="nc-dur" type="number" value="60" min="15"></div>'
     +'<div class="mf"><label class="ml">人數上限</label><input class="mi" id="nc-max" type="number" value="'+defMax+'" min="1" max="50" oninput="updateCPrev()"><span class="mhint">預設取自課程類型</span></div>'
@@ -1132,7 +1136,7 @@ function openAddCourse(){
     +'<div style="display:flex;flex-direction:column;gap:6px">'+(tPickerHtml(_pickT,"tp")||'<div class="info-box">尚未設定老師帳號</div>')+'</div></div>'
     +'<div class="cprev" id="cprev"><div class="cprev-t">課程預覽</div>'
     +'<div class="cprev-r"><span class="cprev-k">類型</span><span class="cprev-v">'+(courseTypes[0]?courseTypes[0].icon+" "+courseTypes[0].name:"")+'</span></div>'
-    +'<div class="cprev-r"><span class="cprev-k">日期</span><span class="cprev-v">'+fmtDate(minD)+'</span></div>'
+    +'<div class="cprev-r"><span class="cprev-k">日期</span><span class="cprev-v">'+fmtDate(initDate)+'</span></div>'
     +'<div class="cprev-r"><span class="cprev-k">上限/截止</span><span class="cprev-v">'+defMax+' 人 / 前 '+cfg.cancelHours+'h</span></div></div>';
   showModal("新增課程",body,confirmAddCourse,"新增");
 }
@@ -1154,7 +1158,7 @@ function updateCPrev(){
     +'<div class="cprev-r"><span class="cprev-k">老師</span><span class="cprev-v">'+tname+'</span></div>'
     +'<div class="cprev-r"><span class="cprev-k">上限/截止</span><span class="cprev-v">'+maxP+' 人 / 前 '+cancelH+'h</span></div>';
 }
-function confirmAddCourse(){
+async function confirmAddCourse(){
   const date=document.getElementById("nc-date")?.value;
   const time=document.getElementById("nc-time")?.value;
   const type=document.getElementById("nc-type")?.value||(courseTypes[0]?courseTypes[0].name:"");
@@ -1162,7 +1166,9 @@ function confirmAddCourse(){
   const cancelH=Number(document.getElementById("nc-cancel")?.value);
   const tid=_pickT||(getTeachers()[0]?getTeachers()[0].id:"");
   if(!date||!time){alert("請填寫日期和時間");return;}
-  schedules.push({id:"m"+(sidN++),date,time,type,teacherId:tid,max:maxP,min:MIN,cancelHours:isNaN(cancelH)?null:cancelH,status:"open",src:"manual"});
+  const ns={id:"m"+(sidN++),date,time,type,teacherId:tid,max:maxP,min:MIN,cancelHours:isNaN(cancelH)?null:cancelH,status:"open",src:"manual"};
+  schedules.push(ns);
+  try{await fbSet('schedules',ns.id,ns);}catch(e){console.error('fbSet schedule',e);}
   closeModal();render();
 }
 function openEditCourse(sid){
@@ -1180,7 +1186,7 @@ function openEditCourse(sid){
     +'<div style="background:var(--bg);border-radius:8px;padding:9px 12px;border:.5px solid var(--brd);font-size:12px;color:var(--t3)">日期：'+fmtDate(s.date)+'（不可修改）</div>';
   showModal("編輯課程 — "+fmtDate(s.date),body,confirmEditCourse,"儲存");
 }
-function confirmEditCourse(){
+async function confirmEditCourse(){
   const s=schedules.find(x=>x.id===_editSid);if(!s)return;
   s.type=document.getElementById("ec-type")?.value||s.type;
   s.time=document.getElementById("ec-time")?.value||s.time;
@@ -1188,6 +1194,7 @@ function confirmEditCourse(){
   const ch=Number(document.getElementById("ec-cancel")?.value);
   s.cancelHours=isNaN(ch)?null:ch;
   s.teacherId=_editT||s.teacherId;
+  try{await fbSet('schedules',s.id,s);}catch(e){console.error('fbSet schedule edit',e);}
   closeModal();render();
 }
 

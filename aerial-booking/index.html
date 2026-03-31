@@ -565,26 +565,32 @@ function rejectRefund(id){
 }
 function adminForceConfirm(uid,mv){confirmPayment(uid,mv);}
 function doCopyLastWeek(){
-  const today=new Date(selDate||adminSelDate);
-  // Find the week that started 7 days ago
-  const weekStart=new Date(today);weekStart.setDate(weekStart.getDate()-7);
-  const weekEnd=new Date(weekStart);weekEnd.setDate(weekEnd.getDate()+6);
+  // 找目前月份，把整個月有課的每一天，往後+7天複製一份（跨月也可）
   const fmt=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
-  const ws=fmt(weekStart),we=fmt(weekEnd);
-  const prev=schedules.filter(s=>s.date>=ws&&s.date<=we);
-  if(!prev.length){alert("上週沒有課程可複製");return;}
+  // 根據目前月份檢視，找出「上個月或本月」有課的日期，複製到+7天
+  const p=monthView.split("-").map(Number);
+  // 取本月所有課 + 上個月最後一週的課
+  const allSrc=schedules.filter(s=>s.status!=="stopped");
   let added=0;
-  prev.forEach(s=>{
-    const old=new Date(s.date+"T00:00:00");
-    const nDate=new Date(old);nDate.setDate(nDate.getDate()+7);
-    const nd=fmt(nDate);
-    if(!schedules.some(x=>x.date===nd&&x.time===s.time&&x.type===s.type)){
-      schedules.push({id:"s-"+nd.replace(/-/g,"")+"-"+s.type+"-"+s.time,
-        date:nd,time:s.time,type:s.type,teacherId:s.teacherId,
-        max:s.max,min:s.min,cancelHours:s.cancelHours,status:"open",src:"copy"});added++;
-    }
-  });
-  alert(added>0?"已複製 "+added+" 堂到下週":already);render();
+  // 找出本月每一天，看+7天有沒有對應課
+  const days=new Date(p[0],p[1],0).getDate();
+  for(let d=1;d<=days;d++){
+    const srcDate=p[0]+"-"+String(p[1]).padStart(2,"0")+"-"+String(d).padStart(2,"0");
+    const daySch=allSrc.filter(s=>s.date===srcDate);
+    if(!daySch.length)continue;
+    daySch.forEach(s=>{
+      const old=new Date(s.date+"T00:00:00");
+      const nDate=new Date(old);nDate.setDate(nDate.getDate()+7);
+      const nd=fmt(nDate);
+      if(!schedules.some(x=>x.date===nd&&x.time===s.time&&x.type===s.type)){
+        schedules.push({id:"s-"+nd.replace(/-/g,"")+s.type.replace(/\s/g,"")+s.time.replace(/:/g,""),
+          date:nd,time:s.time,type:s.type,teacherId:s.teacherId,
+          max:s.max,min:s.min,cancelHours:s.cancelHours,status:"open",src:"copy"});
+        added++;
+      }
+    });
+  }
+  alert(added>0?"已複製 "+added+" 堂（每堂往後推7天）":monthView+" 的課程已全部複製過");render();
 }
 function doCopyLastMonth(){
   const p=monthView.split("-").map(Number);let py=p[0],pm=p[1]-1;if(pm<1){pm=12;py--;}

@@ -280,9 +280,9 @@ const LINE_REDIRECT_URI = 'https://voluble-granita-401749.netlify.app/line-callb
 const LINE_STATE = 'aerial_yoga_' + Math.random().toString(36).slice(2);
 
 // ═══ GLOBAL HANDLER TABLE
-// Declare directly on window so onclick="_H.hXXX()" always works
-window._H = {};
-const _H = window._H;
+// Use var so _H is automatically window._H (accessible in onclick attributes)
+var _H = {};
+window._H = _H;
 function _h(fn){ const k='h'+(++_hN); _H[k]=fn; return k; }
 let _hN=0;
 

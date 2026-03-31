@@ -280,10 +280,11 @@ const LINE_REDIRECT_URI = 'https://voluble-granita-401749.netlify.app/line-callb
 const LINE_STATE = 'aerial_yoga_' + Math.random().toString(36).slice(2);
 
 // ═══ GLOBAL HANDLER TABLE
-const _H = {};
+// Declare directly on window so onclick="_H.hXXX()" always works
+window._H = {};
+const _H = window._H;
 function _h(fn){ const k='h'+(++_hN); _H[k]=fn; return k; }
 let _hN=0;
-// Expose functions needed by onclick attributes to window scope
 
 // ═══ CONSTANTS
 const NOW = new Date();
@@ -319,7 +320,6 @@ let currentView="login",currentUserId=null,activeRole=null;
 let expandedRows={};
 let _pickT="",_editT="",_editSid="",_ctColor=CT_COLORS[0],_editCtId="";
 let _statsSearch="",_addSearch="";
-window._H = _H;
 
 
 let _dbLoaded=false;
